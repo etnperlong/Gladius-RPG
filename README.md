@@ -28,6 +28,7 @@ Open `index.html` in your browser — no installation required!
 |------|-------------|
 | `index.html` | Latest playable version |
 | `gladius.html` | Alternate build |
+| `gladius-guide.txt` | Beginner's guide (Traditional Chinese) |
 | `App.jsx` / `gladiatus-clone.jsx` | React component source (versions 1–3) |
 
 ## Tags
