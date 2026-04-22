@@ -33,3 +33,7 @@ Open `index.html` in your browser — no installation required!
 ## Tags
 
 `#react` `#rpg` `#browser-game` `#vibe-coding` `#education` `#javascript`
+
+## Disclaimer
+
+This is an educational, non-profit, fan-made project. All original game concepts belong to their respective copyright holders.
