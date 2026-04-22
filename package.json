@@ -1,0 +1,21 @@
+{
+  "name": "gladius-rpg",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "parcel serve index.html",
+    "build": "parcel build index.html",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "parcel": "^2.15.4",
+    "typescript": "^5.8.3"
+  }
+}
