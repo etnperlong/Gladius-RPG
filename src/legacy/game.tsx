@@ -21,6 +21,7 @@ import { clearGameState, loadGameState, saveGameState } from "../game/persistenc
 import {
   applyProgressionRewards,
   cAtk,
+  checkQuestReset,
   cDef,
   cMhp,
   cSpd,
@@ -1499,35 +1500,6 @@ function App() {
     setArenaOpponents(Array.from({length:4}, ()=>genArenaOpponent(player.level)) as LegacyArenaOpponent[]);
   };
 
-  // ── Quest handlers ────────────────────────────────────────────────────────
-  // Reset daily/weekly quests if date has changed
-  const checkQuestReset = (qs: any) => {
-    const today = new Date().toISOString().slice(0,10);
-    const week  = getWeekKey();
-    let newQs   = {...qs, progress:{...qs.progress}};
-    let changed = false;
-    if(qs.dailyDate !== today) {
-      // Reset daily quest bases to current player values
-      Object.keys(QUEST_DEFS).forEach(id=>{
-        if(QUEST_DEFS[id].cat==="daily") {
-          newQs.progress[id] = { collected:false, baseVal: player[QUEST_DEFS[id].field]||0 };
-        }
-      });
-      newQs.dailyDate = today;
-      changed = true;
-    }
-    if(qs.weeklyDate !== week) {
-      Object.keys(QUEST_DEFS).forEach(id=>{
-        if(QUEST_DEFS[id].cat==="weekly") {
-          newQs.progress[id] = { collected:false, baseVal: player[QUEST_DEFS[id].field]||0 };
-        }
-      });
-      newQs.weeklyDate = week;
-      changed = true;
-    }
-    return changed ? newQs : qs;
-  };
-
   // Collect quest reward
   const collectQuest = (questId: any) => {
     const def = QUEST_DEFS[questId];
@@ -1562,7 +1534,7 @@ function App() {
   // Update quest progress whenever player stats change — check for newly completable quests
   const updateQuestProgress = (updatedPlayer: any, updatedInventory: any) => {
     const statsWithInv = {...updatedPlayer, _inv: updatedInventory||inventory};
-    const newQs = checkQuestReset(questState);
+    const newQs = checkQuestReset(questState, updatedPlayer);
     // Check if any quests became completable — show notification
     Object.keys(QUEST_DEFS).forEach(id=>{
       if(!(newQs.progress[id]&&newQs.progress[id].collected)) {
@@ -2107,7 +2079,7 @@ function App() {
               {tab==="quest"&&<QuestTab
                 player={player}
                 inventory={inventory}
-                questState={checkQuestReset(questState)}
+                questState={checkQuestReset(questState, player)}
                 onCollect={collectQuest}
               />}
 
