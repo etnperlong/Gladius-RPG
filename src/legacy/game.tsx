@@ -37,6 +37,7 @@ import {
   getWeaponCat,
   initQuestState,
   isQuestDone,
+  simulateArenaBattle,
   simulateExpedition,
   simulateMercRun,
   simulateRun,
@@ -1261,57 +1262,6 @@ function App() {
       log.push({ txt: `🌟 等級提升！Lv.${lv}！`, type: "win" });
     }
     return next;
-  }
-
-  // ── Simulate Arena PvP ────────────────────────────────────────────────────
-  function simulateArenaBattle(pl: any, opponent: any) {
-    const pAtk = cAtk(pl);
-    const pDef = cDef(pl);
-    const pMhp = cMhp(pl);
-    const specials = gSpec(pl);
-    const wc = getWeaponCat(pl);
-    const oWc = WEAPON_CATEGORIES[opponent.wcKey];
-    const pSpd = cSpd(pl);
-    const oSpd = Math.floor((3 + opponent.level*0.5) * (opponent.tier==="strong"?1.2:1));
-    const log: any[] = [];
-    const bleedRef = {val:0};
-
-    log.push({txt:`⚔️ 競技場對決！`,type:"title"});
-    log.push({txt:`你 (Lv.${pl.level} 攻${pAtk} 防${pDef}) vs ${opponent.name} (Lv.${opponent.level} 攻${opponent.attack} 防${opponent.defense})`,type:"info"});
-    if(wc)  log.push({txt:`你的武器：${wc.label} — ${wc.traitDesc}`,type:"info"});
-    if(oWc) log.push({txt:`對手武器：${oWc.label} — ${oWc.traitDesc}`,type:"info"});
-    log.push({txt:`━━━━━━━━━━━━━━━━━━`,type:"sep"});
-    if(pSpd>=oSpd||(wc&&wc.trait==="firstblood"))
-      log.push({txt:`⚡ 你先手！（速度 ${pSpd} vs ${oSpd}）`,type:"hit"});
-    else
-      log.push({txt:`⚡ 對手先手！（速度 ${oSpd} vs ${pSpd}）`,type:"enemy"});
-
-    const fakeEnemy = {
-      name:opponent.name, icon:"🏟",
-      hp:opponent.maxHp, maxHp:opponent.maxHp,
-      attack:opponent.attack, defense:opponent.defense,
-      trait:oWc?oWc.trait:"balanced", traitDesc:oWc?oWc.traitDesc:"",
-      isBoss:false, burnStacks:0, shielded:false, regenVal:0,
-      expReward:0, goldReward:0,
-    };
-
-    const result = fightMonster(fakeEnemy, {...pl}, pAtk, pDef, pMhp, specials, wc, log, bleedRef);
-    const won = result.won;
-    let goldPlundered = 0;
-
-    if(won) {
-      goldPlundered = Math.floor(opponent.goldCarried * (0.10 + Math.random()*0.15));
-      log.push({txt:`━━━━━━━━━━━━━━━━━━`,type:"sep"});
-      log.push({txt:`🏆 勝利！擊敗 ${opponent.name}！`,type:"win"});
-      log.push({txt:`💰 掠奪金幣 ${goldPlundered}（對手攜帶 ${opponent.goldCarried}）`,type:"win"});
-    } else {
-      log.push({txt:`━━━━━━━━━━━━━━━━━━`,type:"sep"});
-      log.push({txt:`💀 落敗！被 ${opponent.name} 擊倒！`,type:"lose"});
-      log.push({txt:`🛌 你需要休息 30 分鐘才能再戰`,type:"lose"});
-    }
-    log.push({txt:`─────────────────`,type:"sep"});
-    log.push({txt:`📊 造成 ${result.totalDmgDealt} · 承受 ${result.totalDmgTaken} · 爆擊 ${result.crits} 次`,type:"info"});
-    return {log, finalPlayer:result.np, won, goldPlundered};
   }
 
   const startBattle=(dungeon: any,tier: any)=>{
