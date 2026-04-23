@@ -4,25 +4,41 @@ import {
   INITIAL_EQUIPMENT,
   INITIAL_PLAYER,
 } from "../game/constants";
-import { AFFIXES } from "../game/data/affixes";
-import { ARENA_FIRST_NAMES, ARENA_LAST_NAMES, ARENA_TITLES } from "../game/data/arena";
 import { DUNGEONS } from "../game/data/dungeons";
 import { ENHANCE_LEVELS } from "../game/data/enhanceLevels";
 import { EQUIP_SLOTS } from "../game/data/equipmentSlots";
 import { EXPEDITIONS } from "../game/data/expeditions";
-import {
-  ALL_BASE_ITEMS,
-} from "../game/data/itemBases";
-import { MERC_BASES, MERC_DUNGEONS, MERC_SCROLL_AFFIXES } from "../game/data/mercenaries";
+import { MERC_DUNGEONS } from "../game/data/mercenaries";
 import { MONSTERS } from "../game/data/monsters";
 import { QUEST_DEFS } from "../game/data/quests";
-import { RARITIES } from "../game/data/rarities";
 import { TRAIN_STATS } from "../game/data/trainStats";
 import { WEAPON_CATEGORIES } from "../game/data/weaponCategories";
 import { TRAIN_STAT_DISPLAY_KEYS } from "../game/lib/display";
 import { applyEnhanceBonus, calcSellPrice, enhanceCost } from "../game/lib/items";
 import { trainCost } from "../game/lib/training";
 import { clearGameState, loadGameState, saveGameState } from "../game/persistence";
+import {
+  cAtk,
+  cDef,
+  cMhp,
+  cSpd,
+  fightMonster,
+  genArenaOpponent,
+  genAuctionItem,
+  genLoot,
+  genMercScroll,
+  genShopItem,
+  gSpec,
+  getRarity,
+  getQuestProgress,
+  getWeekKey,
+  getWeaponCat,
+  initQuestState,
+  isQuestDone,
+  simulateExpedition,
+  simulateMercRun,
+  simulateRun,
+} from "../game/systems";
 import type {
   RuntimeArenaOpponent,
   RuntimeLogEntry,
@@ -86,460 +102,20 @@ type LegacyReplay = Omit<RuntimeReplay, "drops" | "dungeon" | "tier" | "expediti
 };
 type LootDrop = LegacyItem & { _remaining?: LegacyItem[] };
 
-function genShopItem(playerLevel: any, slotHint: any = null) {
-  const slots = ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"];
-  const slot = slotHint || slots[Math.floor(Math.random()*slots.length)];
-  const pool  = ALL_BASE_ITEMS.filter(b=>b.slot===slot && b.lvReq <= playerLevel+3);
-  const base  = pool.length ? pool[Math.floor(Math.random()*pool.length)]
-                             : ALL_BASE_ITEMS.find(b=>b.slot===slot) || ALL_BASE_ITEMS[0];
-  const rar = rollRarity(Math.min(0.4, playerLevel*0.01));
-  const aff: any[]   = rollAffixes(base.slot, rar, playerLevel);
-  const name  = buildName(base, rar, aff);
-  const bon: AnyRecord   = {attack:0,defense:0,hp:0,speed:0};
-  const spec: any[]  = [];
-  for(const a of aff){
-    if(a.stat) bon[a.stat]=(bon[a.stat]||0)+a.rolledVal;
-    if(a.special) spec.push({type:a.special,val:a.rolledVal});
-  }
-  const sc = itemLevelScale(playerLevel);
-  const item: AnyRecord = {
-    ...base, name,
-    attack:  Math.floor(((base.attack||0)+bon.attack)*sc),
-    defense: Math.floor(((base.defense||0)+bon.defense)*sc),
-    hp:      Math.floor(((base.hp||0)+bon.hp)*sc),
-    speed:   Math.floor(((base.speed||0)+bon.speed)*sc),
-    rarity:rar.id, rarityLabel:rar.label, rarityColor:rar.color, rarityGlow:rar.glow||"",
-    affixes:aff, specials:spec,
-    uid:Date.now()+Math.random(),
-    type:base.slot, itemLevel:playerLevel,
-  };
-  const rarCostMult = ({normal:1,magic:2.8,rare:7,legendary:18,mythic:45} as AnyRecord)[rar.id]||1;
-  item.cost = Math.floor(calcSellPrice(item) * 2.5 * rarCostMult);
-  return item;
-}
-
-function genAuctionItem(playerLevel: any) {
-  const rarPool = ["rare","legendary","mythic"];
-  const forcedGrade = rarPool[Math.floor(Math.random()*rarPool.length)];
-  const item = genShopItem(playerLevel);
-  const rar = getRarity(forcedGrade);
-  const slots = ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"];
-  const slot = slots[Math.floor(Math.random()*slots.length)];
-  const pool = ALL_BASE_ITEMS.filter(b=>b.slot===slot&&b.lvReq<=playerLevel+3);
-  const base = pool.length ? pool[Math.floor(Math.random()*pool.length)] : ALL_BASE_ITEMS[0];
-  const aff: any[]  = rollAffixes(base.slot, rar, playerLevel);
-  const name = buildName(base, rar, aff);
-  const bon: AnyRecord  = {attack:0,defense:0,hp:0,speed:0};
-  const spec: any[] = [];
-  for(const a of aff){ if(a.stat)bon[a.stat]=(bon[a.stat]||0)+a.rolledVal; if(a.special)spec.push({type:a.special,val:a.rolledVal}); }
-  const sc = itemLevelScale(playerLevel);
-  const auctionItem: AnyRecord = {
-    ...base, name,
-    attack:  Math.floor(((base.attack||0)+bon.attack)*sc),
-    defense: Math.floor(((base.defense||0)+bon.defense)*sc),
-    hp:      Math.floor(((base.hp||0)+bon.hp)*sc),
-    speed:   Math.floor(((base.speed||0)+bon.speed)*sc),
-    rarity:rar.id, rarityLabel:rar.label, rarityColor:rar.color, rarityGlow:rar.glow||"",
-    affixes:aff, specials:spec,
-    uid:Date.now()+Math.random(), type:base.slot, itemLevel:playerLevel,
-  };
-  const rarCostMult=({normal:1,magic:2.8,rare:7,legendary:18,mythic:45} as AnyRecord)[rar.id]||1;
-  auctionItem.cost = Math.floor(calcSellPrice(auctionItem)*2.5*rarCostMult);
-  const baseBid = Math.floor(auctionItem.cost*0.5);
-  return {
-    ...auctionItem,
-    auctionId: Date.now()+Math.random(),
-    baseBid, currentBid:baseBid, myBid:0,
-    bidCount: Math.floor(Math.random()*5),
-    endsIn: Math.floor(3+Math.random()*5),
-    sold: false,
-  };
-}
-
-const getRarity = (id: any): any => RARITIES.find((r: any)=>r.id===id) || RARITIES[0];
-
-function itemLevelScale(playerLevel: any) {
-  const tier = Math.floor(playerLevel / 10);
-  return Math.pow(1.25, tier);
-}
-
-function genMercScroll(playerLevel: any, forceGrade: any = null): any {
-  const bonus = Math.min(0.5, playerLevel * 0.015);
-  const rar = forceGrade ? getRarity(forceGrade) : rollRarity(bonus);
-  const eligBases = MERC_BASES.filter(b => {
-    const bRar = RARITIES.findIndex(r=>r.id===b.grade);
-    const sRar = RARITIES.findIndex(r=>r.id===rar.id);
-    return bRar <= sRar + 1;
-  });
-  const chosenBase = eligBases[Math.floor(Math.random() * eligBases.length)];
-  const affixCount = rar.id==="mythic"?3 : rar.id==="legendary"?2 : rar.id==="rare"?1 : 0;
-  const rolledAffixes: any[] = [];
-  const usedAff = new Set();
-  const sc = 1 + (playerLevel - 1) * 0.05;
-  for (let i = 0; i < affixCount; i++) {
-    const pool = MERC_SCROLL_AFFIXES.filter(a => !usedAff.has(a.id));
-    if (!pool.length) break;
-    const a = pool[Math.floor(Math.random() * pool.length)];
-    usedAff.add(a.id);
-    if (a.stat) rolledAffixes.push({...a, rolledVal: Math.round((a.min + Math.random()*(a.max-a.min))*sc)});
-    else rolledAffixes.push({...a, rolledVal: a.val});
-  }
-  const bon: AnyRecord = {attack:0, defense:0, hp:0, heal:0};
-  const specials: any[] = [];
-  for (const a of rolledAffixes) {
-    if (a.stat) bon[a.stat] += a.rolledVal;
-    if (a.special) specials.push({type:a.special, val:a.rolledVal});
-  }
-  const pre = rolledAffixes.find((a: any)=>a.stat);
-  const suf = rolledAffixes.find((a: any)=>a.special);
-  let name = chosenBase.name;
-  if (pre) name = pre.tag + name;
-  if (suf) name = name + "·" + suf.tag;
-  if (rar.id==="mythic") name = "【神話】" + name;
-  return {
-    ...chosenBase,
-    name,
-    attack:  chosenBase.attack  + bon.attack,
-    defense: chosenBase.defense + bon.defense,
-    hp:      chosenBase.hp      + bon.hp,
-    heal:    (chosenBase.heal||0) + bon.heal,
-    rarity:  rar.id, rarityLabel: rar.label, rarityColor: rar.color, rarityGlow: rar.glow||"",
-    affixes: rolledAffixes, specials,
-    uid: Date.now() + Math.random(),
-    type: "merc_scroll",
-    slot: "merc_scroll",
-    scrollGrade: rar.id,
-  };
-}
-
 const DUNGEON_TIERS: AnyList = [
   { id:"normal", label:"普通", color:"#8a9070", mult:1.0,  expMult:1.0, goldMult:1.0, lootBonus:0,    minLvOffset:0 },
   { id:"hero",   label:"英雄", color:"#4a9fd4", mult:1.35, expMult:1.6, goldMult:1.4, lootBonus:0.15, minLvOffset:4 },
   { id:"legend", label:"傳說", color:"#d4b84a", mult:1.75, expMult:2.5, goldMult:2.0, lootBonus:0.28, minLvOffset:8 },
 ];
 
-function rollRarity(bonus: any = 0): any {
-  const adj: any[] = RARITIES.map((r: any)=>({...r,weight:r.id==="normal"?Math.max(5,r.weight-bonus*80):r.weight+bonus*(r.id==="mythic"?30:r.id==="legendary"?15:5)}));
-  const total=adj.reduce((s,r)=>s+r.weight,0); let roll=Math.random()*total;
-  for(const r of adj){roll-=r.weight;if(roll<=0)return r;} return adj[0];
-}
-function rollAffixes(slot: any,rarity: any,lv: any){
-  if(rarity.maxAffixes===0)return[];
-  const cnt=rarity.id==="mythic"?6:rarity.id==="legendary"?4:rarity.id==="rare"?2+Math.floor(Math.random()*2):1+Math.floor(Math.random()*2);
-  const elig=AFFIXES.filter(a=>a.slots.includes(slot)); const ch:any[]=[]; const used=new Set();
-  for(let i=0;i<cnt&&i<elig.length;i++){
-    const pool=elig.filter(a=>!used.has(a.id)); if(!pool.length)break;
-    const a=pool[Math.floor(Math.random()*pool.length)]; used.add(a.id);
-    const sc=1+(lv-1)*0.07;
-    if(a.stat) ch.push({...a,rolledVal:Math.round((a.min+Math.random()*(a.max-a.min))*sc)});
-    else{const[lo,hi]=a.val;ch.push({...a,rolledVal:Math.round((lo+Math.random()*(hi-lo))*sc)});}
-  }
-  return ch;
-}
-function buildName(base: any,rarity: any,affixes: any){
-  if(rarity.id==="normal")return base.name;
-  const pre=affixes.find((a: any)=>a.type==="prefix");
-  const suf=affixes.find((a: any)=>a.type==="suffix");
-  let n=base.name;
-  if(pre)n=pre.tag+n;
-  if(suf)n=n+"之"+suf.tag;
-  if(rarity.id==="mythic") n="【神話】"+n;
-  return n;
-}
-function genLoot(plv: any, bonus: any = 0, forcedSlot: any = null){
-  const slotGroups = {
-    weapon:["weapon"], offhand:["offhand"], helmet:["helmet"],
-    armor:["armor"], gloves:["gloves"], boots:["boots"],
-    ring:["ring"], amulet:["amulet"],
-  };
-  let base;
-  if(forcedSlot){
-    const pool=ALL_BASE_ITEMS.filter(b=>b.slot===forcedSlot&&b.lvReq<=plv+2);
-    base=pool[Math.floor(Math.random()*pool.length)];
-  } else {
-    const slots=Object.keys(slotGroups);
-    const chosenSlot=slots[Math.floor(Math.random()*slots.length)];
-    const pool=ALL_BASE_ITEMS.filter(b=>b.slot===chosenSlot&&b.lvReq<=plv+2);
-    base=pool.length>0 ? pool[Math.floor(Math.random()*pool.length)]
-                       : ALL_BASE_ITEMS.filter(b=>b.lvReq<=plv+2)[0];
-  }
-  const rar = rollRarity(bonus);
-  const aff:any[]=rollAffixes(base.slot,rar,plv);
-  const name=buildName(base,rar,aff);
-  const bon: AnyRecord={attack:0,defense:0,hp:0,speed:0};
-  const spec:any[]=[];
-  for(const a of aff){
-    if(a.stat)bon[a.stat]=(bon[a.stat]||0)+a.rolledVal;
-    if(a.special)spec.push({type:a.special,val:a.rolledVal});
-  }
-  const scale = itemLevelScale(plv);
-  return{
-    ...base, name,
-    attack:  Math.floor(((base.attack||0)  + bon.attack)  * scale),
-    defense: Math.floor(((base.defense||0) + bon.defense) * scale),
-    hp:      Math.floor(((base.hp||0)      + bon.hp)      * scale),
-    speed:   Math.floor(((base.speed||0)   + bon.speed)   * scale),
-    rarity:rar.id, rarityLabel:rar.label, rarityColor:rar.color, rarityGlow:rar.glow||"",
-    affixes:aff, specials:spec,
-    uid:Date.now()+Math.random(),
-    type:base.slot,
-    itemLevel: plv,
-  };
-}
-
-const sumEq=(player: any,stat: any)=>Object.values(player.equipment).reduce((s,e)=>{
-  const item = e as any;
-  if(!item) return s;
-  const val = item.enhLv>0 ? applyEnhanceBonus(item)[stat]||0 : item[stat]||0;
-  return s+val;
-},0);
-const cAtk =(p: any)=>p.attack  +(p.trainedAtk||0)+sumEq(p,"attack");
-const cDef =(p: any)=>p.defense +(p.trainedDef||0)+sumEq(p,"defense");
-const cMhp =(p: any)=>p.maxHp   +(p.trainedHp||0)*3+sumEq(p,"hp");
-const cSpd =(p: any)=>p.speed   +(p.trainedSpd||0)+sumEq(p,"speed");
-const gSpec=(p: any)=>{const s: any[]=[];Object.values(p.equipment).forEach(e=>{const item=e as any;if(item&&item.specials)s.push(...item.specials);});return s;};
-const getWeaponCat=(p: any)=>{const w=p.equipment.weapon;return w&&w.cat?WEAPON_CATEGORIES[w.cat]:null;};
-
-function applySpec(specials: any,dmg: any,target: any){
-  let healed=0,extra=0,isCrit=false;
-  for(const s of specials){
-    if(s.type==="lifesteal")  healed+=Math.floor(dmg*s.val/100);
-    if(s.type==="vampiric")   healed+=Math.floor(dmg*s.val/200);
-    if(s.type==="crit"&&Math.random()*100<s.val){extra+=dmg;isCrit=true;}
-    if(s.type==="fury"&&target.hp<target.maxHp*0.3) extra+=s.val;
-    if(s.type==="pierce") extra+=Math.floor(dmg*s.val/100*0.3);
-  }
-  return{healed,extra,isCrit};
-}
-
-function applyWeaponTrait(cat: any, dmg: any, enemy: any, isFirstRound: any, bleedStacks: any){
-  let finalDmg=dmg; let log:any[]=[]; let newBleed=bleedStacks||0;
-  let stunned=false;
-  if(!cat) return{finalDmg,log,newBleed,stunned};
-
-  switch(cat.trait){
-    case "armorbreak":
-      finalDmg=Math.floor(finalDmg*1.2);
-      break;
-    case "stun":
-      if(Math.random()<0.10){stunned=true;log.push(`🌀 【錘】震暈效果！敵人本回合無法攻擊！`);}
-      break;
-    case "bleed":
-      newBleed=Math.min((bleedStacks||0)+1,5);
-      log.push(`🩸 【三叉戟】流血層數：${newBleed}`);
-      break;
-    case "crit_boost":
-      if(Math.random()<0.10){finalDmg*=2;log.push(`💥 【鐮刀】爆擊加成觸發！`);}
-      break;
-    case "soulstrike":
-      if(enemy.hp<enemy.maxHp*0.3){finalDmg=Math.floor(finalDmg*1.5);log.push(`👻 【死亡天使】低血觸發！傷害×1.5`);}
-      break;
-    case "bonecrush":
-      finalDmg+=2;
-      break;
-    case "spellpower":
-      break;
-  }
-  return{finalDmg,log,newBleed,stunned};
-}
-
-function buildEnemy(monsterKey: any, playerLevel: any, mult: any = 1, isBoss: any = false) {
-  const m = MONSTERS[monsterKey] || MONSTERS.wolf;
-  const sc = (0.85 + Math.random()*0.25) * mult;
-  const base = playerLevel * 8 + 12;
-  const bossHpMult  = isBoss ? 1.6 : 1;
-  const bossAtkMult = isBoss ? 1.4 : 1;
-  const bossDefMult = isBoss ? 1.2 : 1;
-  return {
-    key: monsterKey,
-    name: m.name, icon: m.icon,
-    trait: m.trait, traitDesc: m.traitDesc,
-    lore: m.lore, isBoss: m.boss || isBoss,
-    hp:      Math.floor(base * m.hpM  * sc * bossHpMult),
-    maxHp:   Math.floor(base * m.hpM  * sc * bossHpMult),
-    attack:  Math.floor((playerLevel*2.6+4) * m.atkM * sc * bossAtkMult),
-    defense: Math.floor((playerLevel*1.3+2) * m.defM * sc * bossDefMult),
-    expReward:  Math.floor((playerLevel*10+8) * m.hpM * mult * (isBoss?3:1)),
-    goldReward: Math.floor((playerLevel*4+4)  * mult  * (isBoss?4:1)),
-    burnStacks: 0, cursed: false, shielded: isBoss,
-    regenVal: m.trait==="stonewall"?5:0,
-  };
-}
-
-function applyMonsterTrait(enemy: any, dmgToEnemy: any, log: any) {
-  let finalDmg = dmgToEnemy;
-  switch(enemy.trait) {
-    case "dodge":
-      if(Math.random()<0.2){ finalDmg=0; log.push({txt:`${enemy.icon}${enemy.name} 閃避攻擊！`,type:"enemy"}); } break;
-    case "armor":
-      finalDmg = Math.floor(finalDmg * 0.6); break;
-    case "phase":
-      break;
-    case "divine":
-      if(enemy.shielded){ finalDmg=0; enemy.shielded=false; log.push({txt:`🛡 ${enemy.icon}${enemy.name} 的神力護盾抵擋了攻擊！`,type:"enemy"}); } break;
-    case "dragonArmor":
-      finalDmg = Math.floor(finalDmg * 0.65); break;
-    default: break;
-  }
-  return finalDmg;
-}
-
-function enemyAttackPlayer(enemy: any, pDef: any, specials: any, np: any, pMhp: any, log: any, round: any) {
-  let eDef = pDef;
-  let baseDmg = Math.max(1, enemy.attack - eDef + Math.floor(Math.random()*4) - 2);
-
-  if(enemy.trait==="fire") { enemy.burnStacks=(enemy.burnStacks||0)+1; }
-  if(enemy.burnStacks>0) {
-    np.hp=Math.max(0, np.hp - enemy.burnStacks*2);
-    log.push({txt:`🔥 燒傷傷害 ${enemy.burnStacks*2}`,type:"enemy"});
-  }
-
-  if(enemy.trait==="soulSuck") {
-    const suck=Math.floor(baseDmg*0.05);
-    enemy.hp=Math.min(enemy.maxHp,enemy.hp+suck);
-  }
-
-  if(enemy.trait==="voidRip") baseDmg = Math.max(1, enemy.attack + Math.floor(Math.random()*4));
-
-  if(enemy.regenVal>0) {
-    enemy.hp=Math.min(enemy.maxHp,enemy.hp+enemy.regenVal);
-    log.push({txt:`💚 ${enemy.name} 回復 ${enemy.regenVal}HP`,type:"enemy"});
-  }
-
-  if(enemy.trait==="charge" && round===1) { baseDmg=Math.floor(baseDmg*1.3); log.push({txt:`💥 ${enemy.icon}${enemy.name} 憤怒衝鋒！`,type:"enemy"}); }
-
-  if(enemy.trait==="inferno" && round%3===0) { baseDmg=Math.floor(baseDmg*2); log.push({txt:`🔥 ${enemy.icon}${enemy.name} 全力一擊！`,type:"enemy"}); }
-
-  if(enemy.trait==="collapse" && round%5===0) { baseDmg+=15; log.push({txt:`🪨 岩石崩落！額外 15 傷害`,type:"enemy"}); }
-
-  if(enemy.trait==="dragonRage" && enemy.hp<enemy.maxHp*0.3) { baseDmg=Math.floor(baseDmg*1.6); log.push({txt:`😡 古龍暴怒！傷害×1.6`,type:"enemy"}); }
-
-  const thorns=specials.filter((s: any)=>s.type==="thorns").reduce((a: any,x: any)=>a+x.val,0);
-  const reflect=specials.filter((s: any)=>s.type==="reflect").reduce((a: any,x: any)=>a+x.val,0);
-  if(thorns>0){ enemy.hp=Math.max(0,enemy.hp-thorns); log.push({txt:`🌵 荊棘反傷 ${thorns}`,type:"hit"}); }
-  if(reflect>0){ enemy.hp=Math.max(0,enemy.hp-reflect); log.push({txt:`🔮 盾反 ${reflect}`,type:"hit"}); }
-
-  np.hp=Math.max(0, np.hp - baseDmg);
-  log.push({txt:`${enemy.icon}${enemy.name} 攻擊你，造成 ${baseDmg} 傷害`,type:"enemy"});
-  return np;
-}
-
 // ══════════════════════════════════════════════════════════════════════════════
 // QUEST SYSTEM
 // ══════════════════════════════════════════════════════════════════════════════
-
-// Generate initial quest progress state
-function initQuestState() {
-  const today = new Date().toISOString().slice(0,10);
-  const week  = getWeekKey();
-  const progress: AnyRecord = {};
-  Object.keys(QUEST_DEFS).forEach(id => {
-    progress[id] = { collected:false, baseVal:0 };
-  });
-  return { progress, dailyDate:today, weeklyDate:week };
-}
-
-function getWeekKey() {
-  const d = new Date();
-  const jan1 = new Date(d.getFullYear(),0,1);
-  const week = Math.ceil(((d.getTime()-jan1.getTime())/86400000 + jan1.getDay()+1)/7);
-  return `${d.getFullYear()}-W${week}`;
-}
-
-// Get current progress value for a quest given player stats + current session delta
-function getQuestProgress(questId: any, playerStats: any, questState: any) {
-  const def = QUEST_DEFS[questId];
-  if(!def) return 0;
-  const base = (questState.progress[questId]&&questState.progress[questId].baseVal)||0;
-  const current = playerStats[def.field]||0;
-  return current - base;
-}
-
-// Check if a quest is completed
-function isQuestDone(questId: any, playerStats: any, questState: any) {
-  const def = QUEST_DEFS[questId];
-  if(!def) return false;
-  if(questState.progress[questId]&&questState.progress[questId].collected) return false; // already collected
-  // Special achievement checks
-  if(def.special==="enh7") {
-    const equip = playerStats.equipment || {};
-    return Object.values(equip).some(e=>{const item=e as any;return item&&(item.enhLv||0)>=7;});
-  }
-  if(def.special==="3mythic") {
-    const equip = playerStats.equipment || {};
-    const inv   = playerStats._inv || [];
-    const mythicCount = Object.values(equip).filter(e=>{const item=e as any;return item&&item.rarity==="mythic";}).length
-                      + inv.filter((i: any)=>i.rarity==="mythic").length;
-    return mythicCount >= 3;
-  }
-  return getQuestProgress(questId, playerStats, questState) >= def.target;
-}
 
 // ── Arena section continues below ─────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 // ARENA SYSTEM — PvP opponents, injury timer, gold plunder
 // ══════════════════════════════════════════════════════════════════════════════
-// Generate a fake PvP opponent matching roughly the player's level
-function genArenaOpponent(playerLevel: any) {
-  const firstName = ARENA_FIRST_NAMES[Math.floor(Math.random()*ARENA_FIRST_NAMES.length)];
-  const lastName  = ARENA_LAST_NAMES[Math.floor(Math.random()*ARENA_LAST_NAMES.length)];
-  const title     = ARENA_TITLES[Math.floor(Math.random()*ARENA_TITLES.length)];
-  const name      = `${title}${firstName}${lastName}`;
-
-  // Level varies ±3 around player
-  const lvOffset = Math.floor(Math.random()*7) - 3;
-  const oppLv    = Math.max(1, playerLevel + lvOffset);
-
-  // Strength tier: weaker / similar / stronger
-  const tierRoll = Math.random();
-  const tier = tierRoll < 0.35 ? "weak" : tierRoll < 0.70 ? "normal" : "strong";
-  const tierMult = tier==="weak" ? 0.70+Math.random()*0.15
-                 : tier==="normal" ? 0.88+Math.random()*0.24
-                 : 1.10+Math.random()*0.30;
-
-  // Generate equipped gear for the opponent
-  const equipment: AnyRecord = { ...INITIAL_EQUIPMENT };
-  const slots = ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"];
-  // Higher level & stronger tier = better chance of good gear
-  const lootBonus = (oppLv/50) + (tier==="strong"?0.25:tier==="weak"?-0.10:0.05);
-  slots.forEach(slot => {
-    if(Math.random() < 0.75) {
-      equipment[slot] = genLoot(oppLv, Math.max(0, lootBonus), slot);
-    } else {
-      equipment[slot] = null;
-    }
-  });
-
-  // Compute derived stats (same formula as player)
-  const baseAtk  = Math.floor((8 + oppLv*1.8) * tierMult);
-  const baseDef  = Math.floor((3 + oppLv*0.9) * tierMult);
-  const baseMhp  = Math.floor((80 + oppLv*12) * tierMult);
-  const eqAtk    = slots.reduce((s,sl)=>s+(equipment[sl]?equipment[sl].attack||0:0),0);
-  const eqDef    = slots.reduce((s,sl)=>s+(equipment[sl]?equipment[sl].defense||0:0),0);
-  const eqHp     = slots.reduce((s,sl)=>s+(equipment[sl]?equipment[sl].hp||0:0),0);
-
-  const totalAtk = baseAtk + eqAtk;
-  const totalDef = baseDef + eqDef;
-  const totalMhp = baseMhp + eqHp;
-
-  // Estimate gold they carry (more gold = higher level & stronger)
-  const goldCarried = Math.floor((50 + oppLv*20 + Math.random()*oppLv*30) * tierMult);
-
-  // Weapon category (random)
-  const wcKeys = Object.keys(WEAPON_CATEGORIES);
-  const wcKey  = wcKeys[Math.floor(Math.random()*wcKeys.length)];
-
-  return {
-    id: Date.now() + Math.random(),
-    name, title, level: oppLv, tier,
-    attack: totalAtk, defense: totalDef, maxHp: totalMhp, hp: totalMhp,
-    equipment, goldCarried, wcKey,
-    // Win streak for display flavour
-    wins:  Math.floor(Math.random()*30),
-    losses:Math.floor(Math.random()*15),
-  };
-}
-
 // Simulate Arena PvP fight (player vs opponent)
 // Returns {log, won, goldPlundered}
 const css=`
@@ -1689,283 +1265,6 @@ function App() {
     return np;
   }
 
-  function fightMonster(enemy: any, np: any, pAtk: any, pDef: any, pMhp: any, specials: any, wc: any, log: any, bleedRef: any) {
-    let round=0, firstRound=true, bleed=bleedRef.val;
-    let totalDmgDealt=0,totalDmgTaken=0,crits=0,stuns=0;
-    while(np.hp>0&&enemy.hp>0&&round<80){
-      round++;
-      if(bleed>0){
-        const bd=bleed*3;
-        const resist=enemy.trait==="undead"&&Math.random()<0.3;
-        enemy.hp=Math.max(0,enemy.hp-(resist?0:bd));
-        log.push({txt:resist?`💀 ${enemy.name}抵抗流血！`:`🩸 流血${bd}傷害(${bleed}層)`,type:resist?"info":"hit"});
-      }
-      if(enemy.hp<=0) break;
-      let rawDef=enemy.defense;
-      if((wc&&wc.trait)==="armorbreak") rawDef=Math.floor(rawDef*0.8);
-      if(enemy.trait==="phase") rawDef=Math.floor(rawDef*0.75);
-      let dmgMult=1;
-      if((wc&&wc.trait)==="swift"&&firstRound){dmgMult=1.5;log.push({txt:`⚡ 先制一擊！×1.5`,type:"hit"});}
-      let dmg=Math.max(1,Math.floor((pAtk-rawDef+Math.floor(Math.random()*5)-2)*dmgMult));
-      const{healed,extra,isCrit}=applySpec(specials,dmg,enemy);
-      const{finalDmg,log:tlog,newBleed,stunned}=applyWeaponTrait(wc,dmg+extra,enemy,firstRound,bleed);
-      tlog.forEach(t=>log.push({txt:t,type:"hit"}));
-      if(isCrit){log.push({txt:`💥 爆擊！`,type:"hit"});crits++;}
-      if(stunned) stuns++;
-      bleed=newBleed||bleed;
-      let actualDmg=finalDmg;
-      if(enemy.trait==="dodge"&&Math.random()<0.20){actualDmg=0;log.push({txt:`${enemy.icon}${enemy.name}閃避！`,type:"enemy"});}
-      if(enemy.trait==="armor") actualDmg=Math.floor(actualDmg*0.6);
-      if(enemy.trait==="dragonArmor") actualDmg=Math.floor(actualDmg*0.65);
-      if(enemy.trait==="divine"&&enemy.shielded){actualDmg=0;enemy.shielded=false;log.push({txt:`🛡 神力護盾抵擋攻擊！`,type:"enemy"});}
-      enemy.hp=Math.max(0,enemy.hp-actualDmg);
-      totalDmgDealt+=actualDmg;
-      if(actualDmg>0) log.push({txt:`回合${round}: 你→${enemy.icon}${enemy.name} ${actualDmg}${isCrit?"💥":""}`,type:"hit"});
-      if(healed>0){np.hp=Math.min(np.hp+healed,pMhp);log.push({txt:`🩸 吸血+${healed}HP`,type:"heal"});}
-        const regen=specials.filter((s: any)=>s.type==="regen"||s.type==="vampiric").reduce((a: any,x: any)=>a+x.val,0);
-      if(regen>0&&np.hp>0){np.hp=Math.min(np.hp+regen,pMhp);log.push({txt:`💚 回復+${regen}HP`,type:"heal"});}
-      if(enemy.hp<=0) break;
-      if(!stunned){
-        let eDmg=Math.max(1,enemy.attack-pDef+Math.floor(Math.random()*4)-2);
-        if(enemy.trait==="fire"){enemy.burnStacks=(enemy.burnStacks||0)+1;np.hp=Math.max(0,np.hp-enemy.burnStacks*2);log.push({txt:`🔥 燒傷${enemy.burnStacks*2}`,type:"enemy"});}
-        if(enemy.trait==="voidRip") eDmg=Math.max(1,enemy.attack+Math.floor(Math.random()*4));
-        if(enemy.trait==="charge"&&round===1){eDmg=Math.floor(eDmg*1.3);log.push({txt:`💥 ${enemy.name}憤怒衝鋒！`,type:"enemy"});}
-        if(enemy.trait==="inferno"&&round%3===0){eDmg=Math.floor(eDmg*2);log.push({txt:`🔥 ${enemy.name}全力一擊！`,type:"enemy"});}
-        if(enemy.trait==="collapse"&&round%5===0){eDmg+=15;log.push({txt:`🪨 岩石崩落+15`,type:"enemy"});}
-        if(enemy.trait==="dragonRage"&&enemy.hp<enemy.maxHp*0.3){eDmg=Math.floor(eDmg*1.6);log.push({txt:`😡 古龍暴怒！×1.6`,type:"enemy"});}
-        if(enemy.trait==="stonewall"){enemy.hp=Math.min(enemy.maxHp,enemy.hp+5);log.push({txt:`💚 ${enemy.name}回復5HP`,type:"enemy"});}
-        if(enemy.trait==="soulSuck"){const s=Math.floor(eDmg*0.05);enemy.hp=Math.min(enemy.maxHp,enemy.hp+s);}
-        const thorns=specials.filter((s: any)=>s.type==="thorns").reduce((a: any,x: any)=>a+x.val,0);
-        const reflect=specials.filter((s: any)=>s.type==="reflect").reduce((a: any,x: any)=>a+x.val,0);
-        if(thorns>0){enemy.hp=Math.max(0,enemy.hp-thorns);log.push({txt:`🌵 荊棘反傷${thorns}`,type:"hit"});}
-        if(reflect>0){enemy.hp=Math.max(0,enemy.hp-reflect);log.push({txt:`🔮 盾反${reflect}`,type:"hit"});}
-        np.hp=Math.max(0,np.hp-eDmg);
-        totalDmgTaken+=eDmg;
-        log.push({txt:`${enemy.icon}${enemy.name}→你 ${eDmg}傷害`,type:"enemy"});
-      }
-      firstRound=false;
-    }
-    bleedRef.val=bleed;
-    return{np,won:enemy.hp<=0,crits,stuns,totalDmgDealt,totalDmgTaken};
-  }
-
-  function simulateExpedition(expedition: any, initPlayer: any) {
-    let np={...initPlayer};
-    const pAtk=cAtk(np),pDef=cDef(np),pMhp=cMhp(np);
-    const specials=gSpec(np),wc=getWeaponCat(np);
-    const log: any[]=[],drops: any[]=[],bleedRef={val:0};
-    log.push({txt:`🗺 探險：${expedition.name}`,type:"title"});
-    log.push({txt:`"${expedition.desc}"`,type:"info"});
-    if(wc) log.push({txt:`🗡 ${wc.label} — ${wc.traitDesc}`,type:"info"});
-    const enemy=buildEnemy(expedition.monster,np.level,1.0);
-    log.push({txt:`━━ ${enemy.icon}${enemy.name} ｜ HP:${enemy.maxHp} 攻:${enemy.attack} 防:${enemy.defense} ━━`,type:"sep"});
-    log.push({txt:`📜 ${enemy.lore}`,type:"info"});
-    log.push({txt:`⚡ 特性：${enemy.traitDesc}`,type:"info"});
-    const r=fightMonster(enemy,np,pAtk,pDef,pMhp,specials,wc,log,bleedRef);
-    np=r.np;
-    if(r.won){
-      const expG=Math.floor(enemy.expReward*expedition.expMult);
-      const goldG=Math.floor(enemy.goldReward*expedition.goldMult);
-      np=lvUp(np,expG,goldG,log);
-      log.push({txt:`✅ 擊敗${enemy.name}！+${expG}EXP +${goldG}金`,type:"win"});
-      if(Math.random()<0.30+expedition.lootBonus){const d=genLoot(np.level,expedition.lootBonus);drops.push(d);log.push({txt:`✨ 掉落：${d.rarityLabel}【${d.name}】`,type:"loot"});}
-      if(Math.random()<0.08+expedition.lootBonus*0.5){const s=genMercScroll(np.level);drops.push(s);log.push({txt:`📜 傭兵契約捲軸：${s.rarityLabel}【${s.name}】`,type:"loot"});}
-    } else {
-      log.push({txt:`💀 被${enemy.name}擊敗！`,type:"lose"});
-      np.gold=Math.max(50, np.gold-Math.min(300,Math.floor(np.gold*0.08)));
-      np.hp=Math.floor(cMhp(np)*0.3);
-    }
-    log.push({txt:`─────────────────`,type:"sep"});
-    log.push({txt:`📊 ${r.won?"勝利":"落敗"} · 造成${r.totalDmgDealt} · 承受${r.totalDmgTaken}`,type:r.won?"win":"lose"});
-    return{log,finalPlayer:np,drops,won:r.won};
-  }
-
-  function simulateRun(dungeon: any, tier: any, initPlayer: any){
-    let np={...initPlayer};
-    const pAtk=cAtk(np),pDef=cDef(np),pMhp=cMhp(np);
-    const specials=gSpec(np),wc=getWeaponCat(np);
-    const log: any[]=[],drops: any[]=[],bleedRef={val:0};
-    let totalKills=0,totalDmgDealt=0,totalDmgTaken=0,totalCrits=0;
-    log.push({txt:`⚔️ 進入 ${dungeon.name}【${tier.label}】`,type:"title"});
-    log.push({txt:`"${dungeon.lore}"`,type:"info"});
-    if(wc) log.push({txt:`🗡 ${wc.label} — ${wc.traitDesc}`,type:"info"});
-    for(const wave of dungeon.waves){
-      if(np.hp<=0) break;
-      log.push({txt:`━━ ${wave.label} — ${wave.desc} ━━`,type:"sep"});
-      for(const mKey of wave.monsters){
-        if(np.hp<=0) break;
-        const enemy=buildEnemy(mKey,np.level,tier.mult);
-        log.push({txt:`${enemy.icon}${enemy.name} 出現！(HP:${enemy.maxHp} 攻:${enemy.attack} ⚡${enemy.traitDesc})`,type:"info"});
-        const r=fightMonster(enemy,np,pAtk,pDef,pMhp,specials,wc,log,bleedRef);
-        np=r.np;totalDmgDealt+=r.totalDmgDealt;totalDmgTaken+=r.totalDmgTaken;totalCrits+=r.crits;
-        if(r.won){
-          totalKills++;
-          const expG=Math.floor(enemy.expReward*tier.expMult);
-          const goldG=Math.floor(enemy.goldReward*tier.goldMult);
-          np=lvUp(np,expG,goldG,log);
-          log.push({txt:`✅ 擊敗${enemy.name}！+${expG}EXP +${goldG}金`,type:"win"});
-          if(Math.random()<0.20+tier.lootBonus*0.5){const d=genLoot(np.level,tier.lootBonus);drops.push(d);log.push({txt:`✨ 掉落：${d.rarityLabel}【${d.name}】`,type:"loot"});}
-        } else {
-          log.push({txt:`💀 在第${totalKills+1}怪陣亡！`,type:"lose"}); break;
-        }
-      }
-      if(np.hp>0) np.hp=Math.min(pMhp,np.hp+Math.floor(pMhp*0.12));
-    }
-    if(np.hp>0&&dungeon.boss){
-      log.push({txt:`━━━━━━━━━━━━━━━━━━`,type:"sep"});
-      log.push({txt:`🔥 ${dungeon.bossIntro}`,type:"title"});
-      const boss=buildEnemy(dungeon.boss,np.level,tier.mult,true);
-      log.push({txt:`${boss.icon}${boss.name} ｜ HP:${boss.maxHp} 攻:${boss.attack} 防:${boss.defense}`,type:"info"});
-      log.push({txt:`👹 Boss特性：${boss.traitDesc}`,type:"info"});
-      const r=fightMonster(boss,np,pAtk,pDef,pMhp,specials,wc,log,bleedRef);
-      np=r.np;totalDmgDealt+=r.totalDmgDealt;totalDmgTaken+=r.totalDmgTaken;totalCrits+=r.crits;
-      if(r.won){
-        totalKills++;
-        const expG=Math.floor(boss.expReward*tier.expMult);
-        const goldG=Math.floor(boss.goldReward*tier.goldMult);
-        np=lvUp(np,expG,goldG,log);
-        log.push({txt:`👑 擊敗Boss ${boss.name}！+${expG}EXP +${goldG}金`,type:"win"});
-        if(Math.random()<0.60+tier.lootBonus){const d=genLoot(np.level,tier.lootBonus+0.1);drops.push(d);log.push({txt:`✨ Boss掉落：${d.rarityLabel}【${d.name}】`,type:"loot"});}
-        if(Math.random()<0.25+tier.lootBonus){const s=genMercScroll(np.level);drops.push(s);log.push({txt:`📜 Boss掉落契約捲軸：${s.rarityLabel}【${s.name}】`,type:"loot"});}
-      } else {
-        log.push({txt:`💀 敗於Boss ${boss.name}！`,type:"lose"});
-      }
-    }
-    const won=np.hp>0;
-    if(!won){np.gold=Math.max(50,np.gold-Math.min(300,Math.floor(np.gold*0.1)));np.hp=Math.floor(cMhp(np)*0.3);}
-    const totalMonsters=dungeon.waves.flatMap((w: any)=>w.monsters).length+1;
-    log.push({txt:`─────────────────`,type:"sep"});
-    log.push({txt:`📊 戰鬥結算`,type:"title"});
-    log.push({txt:`${won?"🏆 副本完成！":"💀 副本失敗"} · 擊殺${totalKills}/${totalMonsters}`,type:won?"win":"lose"});
-    log.push({txt:`⚔ 造成${totalDmgDealt} · 承受${totalDmgTaken} · 爆擊${totalCrits}次 · 掉落${drops.length}件`,type:"info"});
-    return{log,finalPlayer:np,drops,won};
-  }
-
-  function simulateMercRun(dungeonId: any, initPlayer: any, mercs: any){
-    const dungeon=MERC_DUNGEONS.find(d=>d.id===dungeonId)||MERC_DUNGEONS[0];
-    let np={...initPlayer};
-    const pAtk=cAtk(np),pDef=cDef(np),pMhp=cMhp(np);
-    const specials=gSpec(np);
-    const nm=mercs.map((m: any)=>({...m,curHp:m.hp,alive:true}));
-    const log: any[]=[],drops: any[]=[];
-    let totalDmgDealt=0,totalDmgTaken=0;
-
-    log.push({txt:`🏴 傭兵副本：${dungeon.icon}${dungeon.label}`,type:"title"});
-    log.push({txt:`"${dungeon.lore}"`,type:"info"});
-    log.push({txt:`📢 傭兵：${nm.map((m: any)=>m.name).join("、")}`,type:"info"});
-
-    for(let wi=0;wi<dungeon.waves.length;wi++){
-      const wave=dungeon.waves[wi];
-      if(np.hp<=0) break;
-      log.push({txt:`━━ 第${wi+1}波 — ${wave.desc} ━━`,type:"sep"});
-      for(const mKey of wave.enemies){
-        if(np.hp<=0) break;
-        const mData=MONSTERS[mKey];
-        let enemy;
-        if(mData){
-          enemy=buildEnemy(mKey, np.level+dungeon.lvBonus, wave.mult||1.0);
-        } else {
-          const fallbackKey=Object.keys(MONSTERS)[Math.floor(Math.random()*6)];
-          enemy=buildEnemy(fallbackKey, np.level+dungeon.lvBonus, wave.mult||1.0);
-          enemy.name=mKey;
-        }
-        log.push({txt:`${enemy.icon}${enemy.name} 出現！HP:${enemy.maxHp} 攻:${enemy.attack} ⚡${enemy.traitDesc}`,type:"info"});
-
-        let round=0;
-        while(np.hp>0&&enemy.hp>0&&round<60){
-          round++;
-          let dmg=Math.max(1,pAtk-enemy.defense+Math.floor(Math.random()*5)-2);
-          const{healed,extra,isCrit}=applySpec(specials,dmg,enemy);
-          dmg+=extra; if(isCrit)log.push({txt:`💥 爆擊！`,type:"hit"});
-          if(enemy.trait==="dodge"&&Math.random()<0.18){log.push({txt:`${enemy.name}閃避！`,type:"enemy"});}
-          else{
-            const blocked=enemy.trait==="armor"?Math.floor(dmg*0.4):enemy.trait==="dragonArmor"?Math.floor(dmg*0.35):0;
-            dmg=Math.max(1,dmg-blocked);
-            enemy.hp=Math.max(0,enemy.hp-dmg);
-            totalDmgDealt+=dmg;
-            log.push({txt:`回合${round}: 你→${enemy.icon}${enemy.name} ${dmg}`,type:"hit"});
-          }
-          if(healed>0){np.hp=Math.min(np.hp+healed,pMhp);log.push({txt:`🩸 吸血+${healed}`,type:"heal"});}
-
-          for(const m of nm){
-            if(!m.alive||enemy.hp<=0)continue;
-            const md=Math.max(1,m.attack-enemy.defense+Math.floor(Math.random()*3));
-            enemy.hp=Math.max(0,enemy.hp-md);
-            totalDmgDealt+=md;
-            log.push({txt:`${m.icon}${m.name}→${enemy.name} ${md}`,type:"merc"});
-          }
-          if(enemy.hp<=0) break;
-
-        const alive=nm.filter((m: any)=>m.alive);
-        const tanks=alive.filter((m: any)=>m.defense>=8);
-          const targets=tanks.length?tanks:alive;
-          if(targets.length){
-            const t=targets[Math.floor(Math.random()*targets.length)];
-            const ed=Math.max(1,enemy.attack-t.defense+Math.floor(Math.random()*3));
-            t.curHp=Math.max(0,t.curHp-ed); totalDmgTaken+=ed;
-            log.push({txt:`${enemy.name}→${t.name} ${ed}傷害`,type:"enemy"});
-            if(t.curHp<=0){t.alive=false;log.push({txt:`💀 ${t.name}陣亡！`,type:"lose"});}
-          } else {
-            const ed=Math.max(1,enemy.attack-pDef+Math.floor(Math.random()*4)-2);
-            np.hp=Math.max(0,np.hp-ed); totalDmgTaken+=ed;
-            log.push({txt:`${enemy.name}→你 ${ed}傷害`,type:"enemy"});
-          }
-          const healerMerc=nm.find((m: any)=>m.alive&&(m.heal>0||m.name.includes("治癒")));
-          if(healerMerc){const ha=healerMerc.heal||8;np.hp=Math.min(np.hp+ha,pMhp);log.push({txt:`💚${healerMerc.name}回復${ha}HP`,type:"heal"});}
-          if(enemy.trait==="fire"){enemy.burnStacks=(enemy.burnStacks||0)+1;const bd=enemy.burnStacks*2;np.hp=Math.max(0,np.hp-bd);log.push({txt:`🔥 燒傷${bd}`,type:"enemy"});}
-        }
-
-        if(np.hp>0&&enemy.hp<=0){
-          const expG=Math.floor(enemy.expReward*((dungeon.reward&&dungeon.reward.expMult)||1.2));
-          const goldG=Math.floor(enemy.goldReward*((dungeon.reward&&dungeon.reward.goldMult)||1.5));
-          np=lvUp(np,expG,goldG,log);
-          log.push({txt:`✅ 擊敗${enemy.name}！+${expG}EXP +${goldG}金`,type:"win"});
-        } else if(np.hp<=0){
-          log.push({txt:`💀 你陣亡！`,type:"lose"});
-        }
-      }
-      if(np.hp>0) np.hp=Math.min(pMhp,np.hp+Math.floor(pMhp*0.15));
-    }
-
-    if(np.hp>0&&dungeon.boss){
-      const bd=dungeon.boss;
-      const bossEnemy={
-        name:bd.name, icon:bd.icon, trait:bd.trait, traitDesc:"",
-        hp:Math.floor((np.level*8+12)*bd.hpM*1.5*((dungeon.reward&&dungeon.reward.goldMult)||1)),
-        maxHp:Math.floor((np.level*8+12)*bd.hpM*1.5*((dungeon.reward&&dungeon.reward.goldMult)||1)),
-        attack:Math.floor((np.level*2.6+4)*bd.atkM*1.2),
-        defense:Math.floor((np.level*1.3+2)*bd.defM*1.1),
-        expReward:Math.floor(np.level*40*((dungeon.reward&&dungeon.reward.expMult)||1)),
-        goldReward:Math.floor(np.level*20*((dungeon.reward&&dungeon.reward.goldMult)||1)),
-        shielded:false,burnStacks:0,regenVal:0,isBoss:true,
-      };
-      log.push({txt:`━━━━━━━━━━━━━━━━━━`,type:"sep"});
-      log.push({txt:`👑 副本首領：${bd.icon}${bd.name} 登場！`,type:"title"});
-      log.push({txt:`HP:${bossEnemy.maxHp} 攻:${bossEnemy.attack} 防:${bossEnemy.defense}`,type:"info"});
-      const bleedRef={val:0};
-      const r=fightMonster(bossEnemy,np,pAtk,pDef,pMhp,specials,wCat,log,bleedRef);
-      np=r.np; totalDmgDealt+=r.totalDmgDealt;
-      if(r.won){
-        np=lvUp(np,bossEnemy.expReward,bossEnemy.goldReward,log);
-        log.push({txt:`👑 擊敗首領${bd.name}！+${bossEnemy.expReward}EXP`,type:"win"});
-        const scrollBonus=(dungeon.reward&&dungeon.reward.scrollBonus)||0.3;
-        if(Math.random()<scrollBonus){
-          const s=genMercScroll(np.level);drops.push(s);
-          log.push({txt:`📜 首領掉落契約捲軸：${s.rarityLabel}【${s.name}】`,type:"loot"});
-        }
-        if(Math.random()<0.40){const d=genLoot(np.level,0.20);drops.push(d);log.push({txt:`✨ 掉落：${d.rarityLabel}【${d.name}】`,type:"loot"});}
-      } else {
-        log.push({txt:`💀 敗於首領${bd.name}！`,type:"lose"});
-      }
-    }
-
-    const won=np.hp>0;
-    if(!won){np.gold=Math.max(50, np.gold-Math.min(300,Math.floor(np.gold*0.08)));np.hp=Math.floor(cMhp(np)*0.3);}
-    log.push({txt:`─────────────────`,type:"sep"});
-    log.push({txt:`📊 ${won?"勝利":"落敗"} · 造成${totalDmgDealt} · 承受${totalDmgTaken} · 掉落${drops.length}件`,type:won?"win":"lose"});
-    return{log,finalPlayer:np,drops,won};
-  }
-
   // ── Simulate Arena PvP ────────────────────────────────────────────────────
   function simulateArenaBattle(pl: any, opponent: any) {
     const pAtk = cAtk(pl);
@@ -2018,7 +1317,7 @@ function App() {
   }
 
   const startBattle=(dungeon: any,tier: any)=>{
-    const result=simulateRun(dungeon,tier,{...player});
+    const result=simulateRun(dungeon,tier,{...player},{ lvUp, genLoot, genMercScroll });
     const fp = result.finalPlayer;
     // Track quest stats
     const killCount = dungeon.waves.flatMap((w: any)=>w.monsters).length + (dungeon.boss?1:0);
@@ -2035,7 +1334,7 @@ function App() {
   };
 
   const startExpedition=(expedition: any)=>{
-    const result=simulateExpedition(expedition,{...player});
+    const result=simulateExpedition(expedition,{...player},{ lvUp, genLoot, genMercScroll });
     const fp = result.finalPlayer;
     fp.totalKills       = (fp.totalKills||0) + (result.won ? 1 : 0);
     fp.totalExpeditions = (fp.totalExpeditions||0) + (result.won ? 1 : 0);
@@ -2095,7 +1394,7 @@ function App() {
     setInventory(inv=>inv.filter(i=>!usedUids.has(i.uid)));
     const mercs=selectedScrollObjs.map((s:any)=>({...s,curHp:s.hp,alive:true}));
     const np={...player};
-    const result=simulateMercRun(dungeonId,np,mercs);
+    const result=simulateMercRun(dungeonId,np,mercs,{ lvUp, genLoot, genMercScroll, mercDungeons: MERC_DUNGEONS });
     const fp=result.finalPlayer;
     fp.totalMercRuns=(fp.totalMercRuns||0)+(result.won?1:0);
     fp.highestLevel=Math.max(fp.highestLevel||1,fp.level);
