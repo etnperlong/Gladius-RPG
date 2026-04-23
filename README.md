@@ -2,37 +2,20 @@
 
 A browser-based text RPG with turn-based combat, randomized loot, quests, arena battles, and inventory progression. The current migrated runtime now runs through Parcel + React + TypeScript while legacy standalone files remain in the repo as behavior references.
 
-## 🎮 Run The Game
-
-Install dependencies:
+## 🎮 Run Locally
 
 ```bash
 npm install
-```
-
-Start the Parcel dev server:
-
-```bash
 npm run dev
 ```
 
-Build a production bundle:
+## 🏗️ Build
 
 ```bash
 npm run build
 ```
 
-Run type-checking:
-
-```bash
-npm run typecheck
-```
-
-Run tests:
-
-```bash
-npx vitest run
-```
+Legacy note: `index.html` is no longer a standalone Babel runtime entry after the migration. The old standalone files remain in the repository as migration references until cleanup work is complete.
 
 ## ✨ Features
 
