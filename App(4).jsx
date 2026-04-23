@@ -1,37 +1,4 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>⚔ GLADIUS</title>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    body{margin:0;background:#100c07}
-    #root{min-height:100vh}
-    #loading{
-      display:flex;align-items:center;justify-content:center;
-      min-height:100vh;background:#100c07;
-      font-family:serif;color:#c8961e;font-size:20px;
-      letter-spacing:4px;flex-direction:column;gap:16px;
-    }
-    .lb{width:200px;height:3px;background:#2a1a08;border-radius:2px;overflow:hidden}
-    .lf{height:100%;background:linear-gradient(90deg,#8b5a14,#e8c050,#8b5a14);
-      background-size:200% 100%;animation:la 1s linear infinite}
-    @keyframes la{0%{background-position:100%}100%{background-position:-100%}}
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-</head>
-<body>
-  <div id="loading">
-    <div>⚔ GLADIUS ⚔</div>
-    <div class="lb"><div class="lf"></div></div>
-    <div style="font-size:12px;color:#5a4020;letter-spacing:2px">載入中...</div>
-  </div>
-  <div id="root"></div>
-  <script type="text/babel" data-presets="react">
-const { useState, useCallback, useRef, useEffect } = React;
+import { useState, useCallback, useRef, useEffect } from "react";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WEAPON CATEGORIES — each has unique passive combat traits
@@ -1987,7 +1954,7 @@ function ArenaTab({ player, arenaOpponents, arenaInjuredUntil, arenaRefreshes, o
   );
 }
 
-function App() {
+export default function App() {
   const [player, setPlayer] = useState(() => {
     try {
       const s = localStorage.getItem("g_pl");
@@ -3746,34 +3713,3 @@ function App() {
     </>
   );
 }
-
-// Mount
-try {
-  const root = ReactDOM.createRoot(document.getElementById('root'));
-  root.render(React.createElement(App));
-  document.getElementById('loading').style.display = 'none';
-} catch(e) {
-  document.getElementById('loading').innerHTML =
-    '<div style="color:#c84040;font-size:13px;text-align:center;padding:20px;max-width:400px">' +
-    '⚠️ 載入失敗<br><br><small style="color:#8a5030;word-break:break-all">' + e.message + '</small><br><br>' +
-    '<button onclick="location.reload()" style="padding:8px 20px;background:#1a1208;color:#c8961e;' +
-    'border:1px solid #8b5a14;cursor:pointer;font-family:serif;font-size:14px">🔄 重新載入</button></div>';
-  console.error(e);
-}
-  </script>
-
-<!-- ── Coffee Footer ── -->
-<div style="
-  text-align:center; padding:20px 16px 32px;
-  font-family:'Cinzel',serif; font-size:13px;
-  color:#5a4020; letter-spacing:1px;
-">
-  Enjoying the arena?
-  <a href="https://buymeacoffee.com/ssps6210noa" target="_blank" rel="noopener" style="
-    color:#c8961e; text-decoration:none;
-  " onmouseover="this.style.color='#e8c050'" onmouseout="this.style.color='#c8961e'">
-    ☕ Buy the developer a coffee!
-  </a>
-</div>
-</body>
-</html>
