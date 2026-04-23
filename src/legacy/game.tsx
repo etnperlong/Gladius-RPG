@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  clearGameState,
-  loadGameState,
-  saveGameState,
-} from "../game/persistence";
+  INITIAL_EQUIPMENT,
+  INITIAL_PLAYER,
+} from "../game/constants";
+import { clearGameState, loadGameState, saveGameState } from "../game/persistence";
+import type {
+  RuntimeArenaOpponent,
+  RuntimeItem,
+  RuntimePlayer,
+  RuntimeQuestState,
+  RuntimeReplay,
+} from "../game/types";
 
 type AnyRecord = Record<string, any>;
 type AnyList = any[];
@@ -35,19 +42,6 @@ const EQUIP_SLOTS: AnyList = [
   { id:"ring",    label:"戒指",   icon:"💍",  row:3 },
   { id:"amulet",  label:"護符",   icon:"📿",  row:3 },
 ];
-
-const INITIAL_EQUIPMENT: AnyRecord = Object.fromEntries(EQUIP_SLOTS.map(s=>[s.id,null]));
-
-const INITIAL_PLAYER: AnyRecord = {
-  name:"角鬥士", level:1, exp:0, expNeeded:100,
-  hp:100, maxHp:100, attack:12, defense:5, speed:8, gold:200,
-  equipment: INITIAL_EQUIPMENT,
-  trainedAtk:0, trainedDef:0, trainedHp:0, trainedSpd:0,
-  // Quest tracking counters (lifetime)
-  totalKills:0, totalBossKills:0, totalDungeons:0, totalExpeditions:0,
-  totalArenaWins:0, totalGoldEarned:0, totalEnhances:0, totalTrains:0,
-  totalMercRuns:0, highestLevel:1,
-};
 
 const ENHANCE_LEVELS: AnyList = [
   { lv:1,  rate:0.90, costMult:1.0,  bonus:0.08 },
@@ -839,7 +833,7 @@ function genArenaOpponent(playerLevel) {
                  : 1.10+Math.random()*0.30;
 
   // Generate equipped gear for the opponent
-  const equipment = {};
+  const equipment = { ...INITIAL_EQUIPMENT };
   const slots = ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"];
   // Higher level & stronger tier = better chance of good gear
   const lootBonus = (oppLv/50) + (tier==="strong"?0.25:tier==="weak"?-0.10:0.05);
@@ -1707,7 +1701,12 @@ function LootPopup({ item, onEquip, onTake, onDiscard }) {
 
 
 // ── QuestTab component ────────────────────────────────────────────────────
-function QuestTab({ player, inventory, questState, onCollect }) {
+function QuestTab({ player, inventory, questState, onCollect }: {
+  player: RuntimePlayer;
+  inventory: RuntimeItem[];
+  questState: RuntimeQuestState;
+  onCollect: (questId: string) => void;
+}) {
   const [catTab, setCatTab] = useState("daily");
   const statsWithInv = {...player, _inv: inventory};
 
@@ -1840,7 +1839,15 @@ function QuestTab({ player, inventory, questState, onCollect }) {
 }
 
 // ── ArenaTab component ────────────────────────────────────────────────────
-function ArenaTab({ player, arenaOpponents, arenaInjuredUntil, arenaRefreshes, onRefresh, onFight, onInit }) {
+function ArenaTab({ player, arenaOpponents, arenaInjuredUntil, arenaRefreshes, onRefresh, onFight, onInit }: {
+  player: RuntimePlayer;
+  arenaOpponents: RuntimeArenaOpponent[];
+  arenaInjuredUntil: number;
+  arenaRefreshes: number;
+  onRefresh: (free: boolean) => void;
+  onFight: (opponent: RuntimeArenaOpponent) => void;
+  onInit: () => void;
+}) {
   const [now, setNow] = useState(Date.now());
   // Tick every second for injury countdown
   useEffect(()=>{
@@ -1966,13 +1973,13 @@ function ArenaTab({ player, arenaOpponents, arenaInjuredUntil, arenaRefreshes, o
 }
 
 function App() {
-  const [player, setPlayer] = useState(() => loadGameState().player);
+  const [player, setPlayer] = useState<RuntimePlayer>(() => loadGameState().player);
 
-  const [inventory, setInventory] = useState(() => loadGameState().inventory);
+  const [inventory, setInventory] = useState<RuntimeItem[]>(() => loadGameState().inventory);
 
   const [tab, setTab] = useState("dungeon");
-  const [replay, setReplay] = useState(null);
-  const replayTimerRef = useRef(null);
+  const [replay, setReplay] = useState<RuntimeReplay | null>(null);
+  const replayTimerRef = useRef<number | null>(null);
   const [lootDrop, setLootDrop] = useState(null);
   const [selectedScrolls, setSelectedScrolls] = useState([]);
   const [saveMsg, setSaveMsg] = useState("");
@@ -1986,12 +1993,12 @@ function App() {
   const [enhanceLog, setEnhanceLog] = useState([]);
   const [enhanceAnim, setEnhanceAnim] = useState(null);
   // ── Arena state ──────────────────────────────────────────────────────────
-  const [arenaOpponents, setArenaOpponents] = useState([]);
+  const [arenaOpponents, setArenaOpponents] = useState<RuntimeArenaOpponent[]>([]);
   const [arenaInjuredUntil, setArenaInjuredUntil] = useState(0); // timestamp ms
   const [arenaRefreshes, setArenaRefreshes] = useState(5); // free refreshes per day
   const [arenaLastDate, setArenaLastDate] = useState("");
   // ── Quest state ───────────────────────────────────────────────────────────
-  const [questState, setQuestState] = useState(()=>initQuestState());
+  const [questState, setQuestState] = useState<RuntimeQuestState>(()=>initQuestState());
   const [questNotify, setQuestNotify] = useState(null); // {msg} toast notification // YYYY-MM-DD
 
   const save = useCallback(() => {
@@ -2002,9 +2009,8 @@ function App() {
   const reset = () => {
     if(!confirm("確定重置？"))return;
     clearGameState();
-    const clearedSave = loadGameState();
-    setPlayer(clearedSave.player);
-    setInventory(clearedSave.inventory); setReplay(null); setSelectedScrolls([]);
+    setPlayer({ ...INITIAL_PLAYER, equipment: { ...INITIAL_EQUIPMENT } });
+    setInventory([]); setReplay(null); setSelectedScrolls([]);
   };
 
   const tAtk=cAtk(player), tDef=cDef(player), tMhp=cMhp(player), tSpd=cSpd(player);
