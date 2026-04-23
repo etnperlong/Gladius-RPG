@@ -19,6 +19,7 @@ import { applyEnhanceBonus, calcSellPrice, enhanceCost } from "../game/lib/items
 import { trainCost } from "../game/lib/training";
 import { clearGameState, loadGameState, saveGameState } from "../game/persistence";
 import {
+  applyProgressionRewards,
   cAtk,
   cDef,
   cMhp,
@@ -1252,13 +1253,14 @@ function App() {
   const pSpec=gSpec(player);
   const wCat=getWeaponCat(player);
 
-  function lvUp(np: any,expG: any,goldG: any,log: any){
-    np.gold+=goldG;
-    let exp=np.exp+expG,lv=np.level,en=np.expNeeded,mhp=np.maxHp;
-    while(exp>=en){exp-=en;lv++;en=Math.floor(en*1.4);mhp+=15;np.attack+=2;np.defense+=1;log.push({txt:`🌟 等級提升！Lv.${lv}！`,type:"win"});}
-    np.exp=exp;np.expNeeded=en;np.level=lv;np.maxHp=mhp;
-    np.hp=Math.min(np.hp+20,cMhp(np));
-    return np;
+  function lvUp(np: any, expG: any, goldG: any, log: any) {
+    const withGold = { ...np, gold: (np.gold || 0) + goldG };
+    const prevLevel = withGold.level;
+    const { player: next } = applyProgressionRewards(withGold, { exp: expG, gold: 0 });
+    for (let lv = prevLevel + 1; lv <= next.level; lv++) {
+      log.push({ txt: `🌟 等級提升！Lv.${lv}！`, type: "win" });
+    }
+    return next;
   }
 
   // ── Simulate Arena PvP ────────────────────────────────────────────────────
