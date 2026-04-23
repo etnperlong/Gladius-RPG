@@ -930,8 +930,6 @@ function genArenaOpponent(playerLevel: any) {
 // Simulate Arena PvP fight (player vs opponent)
 // Returns {log, won, goldPlundered}
 const css=`
-@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
-
 *{box-sizing:border-box;margin:0;padding:0}
 
 ::-webkit-scrollbar{width:6px}
