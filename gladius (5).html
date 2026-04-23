@@ -3153,6 +3153,8 @@ function App() {
     setQuestNotify(`🛏 休息完畢！HP 回滿，所有禁戰狀態已解除。\n費用：🪙${cost}`);
     setTimeout(()=>setQuestNotify(null), 3000);
   };
+
+  const initArena = () => {
     const today = new Date().toISOString().slice(0,10);
     // Reset free refreshes on new day
     if(arenaLastDate !== today) {
@@ -4390,19 +4392,5 @@ try {
   console.error(e);
 }
   </script>
-
-<!-- ── Coffee Footer ── -->
-<div style="
-  text-align:center; padding:20px 16px 32px;
-  font-family:'Cinzel',serif; font-size:13px;
-  color:#5a4020; letter-spacing:1px;
-">
-  Enjoying the arena?
-  <a href="https://buymeacoffee.com/ssps6210noa" target="_blank" rel="noopener" style="
-    color:#c8961e; text-decoration:none;
-  " onmouseover="this.style.color='#e8c050'" onmouseout="this.style.color='#c8961e'">
-    ☕ Buy the developer a coffee!
-  </a>
-</div>
 </body>
 </html>

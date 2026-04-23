@@ -8,7 +8,8 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    body{margin:0;background:#100c07}#root{min-height:100vh}
+    body{margin:0;background:#100c07}
+    #root{min-height:100vh}
     #loading{display:flex;align-items:center;justify-content:center;min-height:100vh;
       background:#100c07;font-family:serif;color:#c8961e;font-size:20px;
       letter-spacing:4px;flex-direction:column;gap:16px}
@@ -26,7 +27,9 @@
     <div style="font-size:12px;color:#5a4020;letter-spacing:2px">載入中...</div>
   </div>
   <div id="root"></div>
-  <script>
+  <script type="text/babel" data-presets="react">
+const { useState, useCallback, useRef, useEffect } = React;
+
 // ══════════════════════════════════════════════════════════════════════════════
 // WEAPON CATEGORIES — each has unique passive combat traits
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1849,9 +1852,6 @@ const css=`
 .blood-div::after{left:calc(50% + 18px)}
 `;
 
-</script>
-  <script type="text/babel" data-presets="react">
-const { useState, useCallback, useRef, useEffect } = React;
 function AffixLines({ affixes }) {
   if (!affixes||!affixes.length) return null;
   return (
@@ -2033,73 +2033,6 @@ function LootPopup({ item, onEquip, onTake, onDiscard }) {
   );
 }
 
-
-// ── InnPanel component ────────────────────────────────────────────────────
-function InnPanel({ player, dungeonInjuredUntil, arenaInjuredUntil, cMhp, onRest }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(()=>{
-    const t = setInterval(()=>setNow(Date.now()), 5000);
-    return ()=>clearInterval(t);
-  }, []);
-  const dInj = now < dungeonInjuredUntil;
-  const aInj = now < arenaInjuredUntil;
-  const dMins = dInj ? Math.ceil((dungeonInjuredUntil-now)/60000) : 0;
-  const aMins = aInj ? Math.ceil((arenaInjuredUntil-now)/60000) : 0;
-  const maxHp = cMhp(player);
-  const needsRest = dInj || aInj || player.hp < maxHp;
-  const innCost = Math.max(50, Math.floor(player.level*15+30));
-  return (
-    <div style={{
-      background:needsRest?"linear-gradient(160deg,#1a1008,#120a06)":"linear-gradient(160deg,#0a120a,#080e06)",
-      border:`1px solid ${needsRest?"#8b5a1466":"#2a4a2a44"}`,
-      borderRadius:6,padding:"14px 16px",marginBottom:16,
-    }}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-        <span style={{fontSize:24}}>🛏</span>
-        <div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:13,color:needsRest?"#c8961e":"#4caf50",letterSpacing:.5}}>
-            酒館旅店
-          </div>
-          <div style={{fontSize:11,color:"#5a4020"}}>
-            {needsRest?"你需要休息！":"狀態良好，無需休息"}
-          </div>
-        </div>
-      </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10,fontSize:11}}>
-        <div style={{padding:"3px 8px",borderRadius:3,
-          background:player.hp>=maxHp?"rgba(76,175,80,.15)":"rgba(200,64,64,.15)",
-          border:`1px solid ${player.hp>=maxHp?"#4caf5044":"#c8404044"}`,
-          color:player.hp>=maxHp?"#4caf50":"#c84040"}}>
-          ❤️ {player.hp}/{maxHp}
-        </div>
-        {dInj&&<div style={{padding:"3px 8px",borderRadius:3,background:"rgba(200,64,64,.15)",border:"1px solid #c8404044",color:"#c84040"}}>
-          ⚔️ 地下城禁戰 {dMins}分鐘
-        </div>}
-        {aInj&&<div style={{padding:"3px 8px",borderRadius:3,background:"rgba(200,64,64,.15)",border:"1px solid #c8404044",color:"#c84040"}}>
-          🏟 競技場禁戰 {aMins}分鐘
-        </div>}
-        {!dInj&&!aInj&&player.hp>=maxHp&&<div style={{padding:"3px 8px",borderRadius:3,background:"rgba(76,175,80,.15)",border:"1px solid #4caf5044",color:"#4caf50"}}>
-          ✅ 狀態完好
-        </div>}
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div style={{fontSize:12,color:"#6a5030",flex:1}}>
-          住宿費：<span style={{color:"#f0c040",fontFamily:"'Cinzel',serif"}}>🪙{innCost}</span>
-          <span style={{fontSize:10,color:"#4a3020",marginLeft:6}}>（隨等級增加）</span>
-        </div>
-        <button className="btn btp"
-          style={{fontSize:11,padding:"8px 16px",opacity:needsRest?1:0.5,
-            background:needsRest?"linear-gradient(135deg,#1a3a1a,#0e220e)":""}}
-          onClick={onRest}>
-          🛏 住宿休息
-        </button>
-      </div>
-      <div style={{fontSize:10,color:"#3a2818",marginTop:6,fontStyle:"italic"}}>
-        住宿效果：HP 回滿 · 解除所有禁戰狀態（地下城 + 競技場）
-      </div>
-    </div>
-  );
-}
 
 // ── QuestTab component ────────────────────────────────────────────────────
 function QuestTab({ player, inventory, questState, onCollect }) {
@@ -3280,8 +3213,6 @@ function App() {
   const abandonTavernQuest = (questId) => {
     setTavernAccepted(a=>{const n={...a};delete n[questId];return n;});
   };
-
-  const arenaRefresh = (free) => {
     if(free) {
       if(arenaRefreshes <= 0) return;
       setArenaRefreshes(r=>r-1);
@@ -3842,13 +3773,69 @@ function App() {
                   </div>
 
                   {/* ── INN ── */}
-                  {<InnPanel
-                    player={player}
-                    dungeonInjuredUntil={dungeonInjuredUntil}
-                    arenaInjuredUntil={arenaInjuredUntil}
-                    cMhp={cMhp}
-                    onRest={innRest}
-                  />}
+                  {(()=>{
+                    const now2 = Date.now();
+                    const dInj = now2 < dungeonInjuredUntil;
+                    const aInj = now2 < arenaInjuredUntil;
+                    const dMins = dInj ? Math.ceil((dungeonInjuredUntil-now2)/60000) : 0;
+                    const aMins = aInj ? Math.ceil((arenaInjuredUntil-now2)/60000) : 0;
+                    const needsRest = dInj || aInj || player.hp < cMhp(player);
+                    const innCost = Math.max(50, Math.floor(player.level*15+30));
+                    return(
+                      <div style={{
+                        background:needsRest?"linear-gradient(160deg,#1a1008,#120a06)":"linear-gradient(160deg,#0a120a,#080e06)",
+                        border:`1px solid ${needsRest?"#8b5a1466":"#2a4a2a44"}`,
+                        borderRadius:6,padding:"14px 16px",marginBottom:16,
+                      }}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                          <span style={{fontSize:24}}>🛏</span>
+                          <div>
+                            <div style={{fontFamily:"'Cinzel',serif",fontSize:13,color:needsRest?"#c8961e":"#4caf50",letterSpacing:.5}}>
+                              酒館旅店
+                            </div>
+                            <div style={{fontSize:11,color:"#5a4020"}}>
+                              {needsRest?"你需要休息！":"狀態良好，無需休息"}
+                            </div>
+                          </div>
+                        </div>
+                        {/* Status indicators */}
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10,fontSize:11}}>
+                          <div style={{padding:"3px 8px",borderRadius:3,
+                            background:player.hp>=cMhp(player)?"rgba(76,175,80,.15)":"rgba(200,64,64,.15)",
+                            border:`1px solid ${player.hp>=cMhp(player)?"#4caf5044":"#c8404044"}`,
+                            color:player.hp>=cMhp(player)?"#4caf50":"#c84040"}}>
+                            ❤️ {player.hp}/{cMhp(player)}
+                          </div>
+                          {dInj&&<div style={{padding:"3px 8px",borderRadius:3,background:"rgba(200,64,64,.15)",border:"1px solid #c8404044",color:"#c84040"}}>
+                            ⚔️ 地下城禁戰 {dMins}分鐘
+                          </div>}
+                          {aInj&&<div style={{padding:"3px 8px",borderRadius:3,background:"rgba(200,64,64,.15)",border:"1px solid #c8404044",color:"#c84040"}}>
+                            🏟 競技場禁戰 {aMins}分鐘
+                          </div>}
+                          {!dInj&&!aInj&&player.hp>=cMhp(player)&&<div style={{padding:"3px 8px",borderRadius:3,background:"rgba(76,175,80,.15)",border:"1px solid #4caf5044",color:"#4caf50"}}>
+                            ✅ 狀態完好
+                          </div>}
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{fontSize:12,color:"#6a5030",flex:1}}>
+                            住宿費：<span style={{color:"#f0c040",fontFamily:"'Cinzel',serif"}}>🪙{innCost}</span>
+                            <span style={{fontSize:10,color:"#4a3020",marginLeft:6}}>（隨等級增加）</span>
+                          </div>
+                          <button className="btn btp"
+                            style={{fontSize:11,padding:"8px 16px",
+                              opacity:needsRest?1:0.5,
+                              background:needsRest?"linear-gradient(135deg,#1a3a1a,#0e220e)":"",
+                            }}
+                            onClick={innRest}>
+                            🛏 住宿休息
+                          </button>
+                        </div>
+                        <div style={{fontSize:10,color:"#3a2818",marginTop:6,fontStyle:"italic"}}>
+                          住宿效果：HP 回滿 · 解除所有禁戰狀態（地下城 + 競技場）
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Refresh bar */}
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
@@ -4379,30 +4366,17 @@ function App() {
   );
 }
 try {
-  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
-  document.getElementById('loading').style.display='none';
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(React.createElement(App));
+  document.getElementById('loading').style.display = 'none';
 } catch(e) {
-  document.getElementById('loading').innerHTML=
-    '<div style="color:#c84040;font-size:13px;text-align:center;padding:20px;max-width:400px">'+
-    '⚠️ 載入失敗<br><br><small style="color:#8a5030;word-break:break-all">'+e.message+'</small><br><br>'+
-    '<button onclick="location.reload()" style="padding:8px 20px;background:#1a1208;color:#c8961e;'+
+  document.getElementById('loading').innerHTML =
+    '<div style="color:#c84040;font-size:13px;text-align:center;padding:20px;max-width:400px">' +
+    '⚠️ 載入失敗<br><br><small style="color:#8a5030;word-break:break-all">' + e.message + '</small><br><br>' +
+    '<button onclick="location.reload()" style="padding:8px 20px;background:#1a1208;color:#c8961e;' +
     'border:1px solid #8b5a14;cursor:pointer;font-family:serif;font-size:14px">🔄 重新載入</button></div>';
   console.error(e);
 }
   </script>
-
-<!-- ── Coffee Footer ── -->
-<div style="
-  text-align:center; padding:20px 16px 32px;
-  font-family:'Cinzel',serif; font-size:13px;
-  color:#5a4020; letter-spacing:1px;
-">
-  Enjoying the arena?
-  <a href="https://buymeacoffee.com/ssps6210noa" target="_blank" rel="noopener" style="
-    color:#c8961e; text-decoration:none;
-  " onmouseover="this.style.color='#e8c050'" onmouseout="this.style.color='#c8961e'">
-    ☕ Buy the developer a coffee!
-  </a>
-</div>
 </body>
 </html>
