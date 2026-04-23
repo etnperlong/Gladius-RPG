@@ -4,6 +4,24 @@ import {
   INITIAL_EQUIPMENT,
   INITIAL_PLAYER,
 } from "../game/constants";
+import { AFFIXES } from "../game/data/affixes";
+import { ARENA_FIRST_NAMES, ARENA_LAST_NAMES, ARENA_TITLES } from "../game/data/arena";
+import { DUNGEONS } from "../game/data/dungeons";
+import { ENHANCE_LEVELS } from "../game/data/enhanceLevels";
+import { EQUIP_SLOTS } from "../game/data/equipmentSlots";
+import { EXPEDITIONS } from "../game/data/expeditions";
+import {
+  ALL_BASE_ITEMS,
+} from "../game/data/itemBases";
+import { MERC_BASES, MERC_DUNGEONS, MERC_SCROLL_AFFIXES } from "../game/data/mercenaries";
+import { MONSTERS } from "../game/data/monsters";
+import { QUEST_DEFS } from "../game/data/quests";
+import { RARITIES } from "../game/data/rarities";
+import { TRAIN_STATS } from "../game/data/trainStats";
+import { WEAPON_CATEGORIES } from "../game/data/weaponCategories";
+import { TRAIN_STAT_DISPLAY_KEYS } from "../game/lib/display";
+import { applyEnhanceBonus, calcSellPrice, enhanceCost } from "../game/lib/items";
+import { trainCost } from "../game/lib/training";
 import { clearGameState, loadGameState, saveGameState } from "../game/persistence";
 import type {
   RuntimeArenaOpponent,
@@ -68,174 +86,13 @@ type LegacyReplay = Omit<RuntimeReplay, "drops" | "dungeon" | "tier" | "expediti
 };
 type LootDrop = LegacyItem & { _remaining?: LegacyItem[] };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// WEAPON CATEGORIES — each has unique passive combat traits
-// ══════════════════════════════════════════════════════════════════════════════
-const WEAPON_CATEGORIES: AnyRecord = {
-  sword:    { label:"劍",     icon:"⚔️",  trait:"balanced",   traitDesc:"平衡型，無特殊效果"             },
-  dagger:   { label:"匕首",   icon:"🗡️",  trait:"swift",      traitDesc:"速度+3，首回合傷害×1.5"         },
-  axe:      { label:"斧",     icon:"🪓",  trait:"armorbreak", traitDesc:"無視敵方 20% 防禦"              },
-  hammer:   { label:"錘",     icon:"🔨",  trait:"stun",       traitDesc:"10% 機率使敵人本回合無法攻擊"   },
-  spear:    { label:"長矛",   icon:"🏹",  trait:"firstblood", traitDesc:"先手攻擊，永遠先出手"           },
-  trident:  { label:"三叉戟", icon:"🔱",  trait:"bleed",      traitDesc:"造成流血，每回合額外 3 傷害"    },
-  sickle:   { label:"鐮刀",   icon:"☽",   trait:"crit_boost", traitDesc:"爆擊率額外 +10%"               },
-  angel:    { label:"死亡天使",icon:"🪽",  trait:"soulstrike",  traitDesc:"低血時傷害+50%（敵人HP<30%）"  },
-  club:     { label:"棍棒",   icon:"🪵",  trait:"bonecrush",  traitDesc:"每回合額外 2 點固定傷害"        },
-  staff:    { label:"法杖",   icon:"🪄",  trait:"spellpower", traitDesc:"吸血效果翻倍"                   },
-};
-
-const EQUIP_SLOTS: AnyList = [
-  { id:"weapon",  label:"武器",   icon:"⚔️",  row:0 },
-  { id:"offhand", label:"副手",   icon:"🛡️",  row:0 },
-  { id:"helmet",  label:"頭盔",   icon:"⛑️",  row:1 },
-  { id:"armor",   label:"胸甲",   icon:"🥋",  row:1 },
-  { id:"gloves",  label:"手套",   icon:"🧤",  row:2 },
-  { id:"boots",   label:"靴子",   icon:"👢",  row:2 },
-  { id:"ring",    label:"戒指",   icon:"💍",  row:3 },
-  { id:"amulet",  label:"護符",   icon:"📿",  row:3 },
-];
-
-const ENHANCE_LEVELS: AnyList = [
-  { lv:1,  rate:0.90, costMult:1.0,  bonus:0.08 },
-  { lv:2,  rate:0.85, costMult:1.2,  bonus:0.08 },
-  { lv:3,  rate:0.80, costMult:1.5,  bonus:0.10 },
-  { lv:4,  rate:0.65, costMult:2.0,  bonus:0.10 },
-  { lv:5,  rate:0.55, costMult:3.0,  bonus:0.12 },
-  { lv:6,  rate:0.45, costMult:4.5,  bonus:0.12 },
-  { lv:7,  rate:0.35, costMult:6.5,  bonus:0.15 },
-  { lv:8,  rate:0.25, costMult:9.0,  bonus:0.15 },
-  { lv:9,  rate:0.15, costMult:13.0, bonus:0.20 },
-  { lv:10, rate:0.08, costMult:20.0, bonus:0.20 },
-];
-
-function enhanceCost(item: any) {
-  const base = Math.max(30, calcSellPrice(item) * 1.5);
-  const lvData = ENHANCE_LEVELS[(item.enhLv||0)];
-  return lvData ? Math.floor(base * lvData.costMult) : 0;
-}
-
-function applyEnhanceBonus(item: any) {
-  if(!item.enhLv || item.enhLv === 0) return item;
-  const totalBonus = ENHANCE_LEVELS.slice(0, item.enhLv).reduce((s,l) => s + l.bonus, 0);
-  return {
-    ...item,
-    attack:  Math.floor((item.baseAttack  ||item.attack||0)  * (1 + totalBonus)),
-    defense: Math.floor((item.baseDefense ||item.defense||0) * (1 + totalBonus)),
-    hp:      Math.floor((item.baseHp      ||item.hp||0)      * (1 + totalBonus)),
-    speed:   Math.floor((item.baseSpeed   ||item.speed||0)   * (1 + totalBonus)),
-  };
-}
-
-const TRAIN_STATS: AnyList = [
-  { id:"trainedAtk", label:"攻擊力", icon:"⚔️", color:"#c8781e", desc:"永久提升基礎攻擊" },
-  { id:"trainedDef", label:"防禦力", icon:"🛡️", color:"#4a9fd4", desc:"永久提升基礎防禦" },
-  { id:"trainedHp",  label:"生命值", icon:"❤️", color:"#c84040", desc:"永久提升最大HP",  hpStat:true },
-  { id:"trainedSpd", label:"速度",   icon:"💨", color:"#4caf50", desc:"永久提升速度"     },
-];
-
-export const TRAIN_STAT_DISPLAY_KEYS: AnyRecord = {
-  trainedAtk: "attack",
-  trainedDef: "defense",
-  trainedSpd: "speed",
-};
-
-function trainCost(playerLevel: any, currentTrained: any) {
-  return Math.max(5, Math.floor(playerLevel * 5 + currentTrained * 8));
-}
-
-const BASE_WEAPONS: AnyList = [
-  { name:"短劍",    slot:"weapon", cat:"sword",   attack:6,  icon:"⚔️", lvReq:1  },
-  { name:"長劍",    slot:"weapon", cat:"sword",   attack:11, icon:"⚔️", lvReq:4  },
-  { name:"闊劍",    slot:"weapon", cat:"sword",   attack:17, icon:"⚔️", lvReq:8  },
-  { name:"格鬥劍",  slot:"weapon", cat:"sword",   attack:22, icon:"⚔️", lvReq:12 },
-  { name:"匕首",    slot:"weapon", cat:"dagger",  attack:5,  speed:2, icon:"🗡️", lvReq:1 },
-  { name:"刺刀",    slot:"weapon", cat:"dagger",  attack:9,  speed:3, icon:"🗡️", lvReq:4 },
-  { name:"影刃",    slot:"weapon", cat:"dagger",  attack:14, speed:4, icon:"🗡️", lvReq:8 },
-  { name:"手斧",    slot:"weapon", cat:"axe",     attack:8,  icon:"🪓", lvReq:2  },
-  { name:"戰斧",    slot:"weapon", cat:"axe",     attack:15, icon:"🪓", lvReq:6  },
-  { name:"雙頭戰斧",slot:"weapon", cat:"axe",     attack:24, icon:"🪓", lvReq:11 },
-  { name:"木槌",    slot:"weapon", cat:"hammer",  attack:7,  icon:"🔨", lvReq:1  },
-  { name:"戰鎚",    slot:"weapon", cat:"hammer",  attack:13, icon:"🔨", lvReq:5  },
-  { name:"重力鎚",  slot:"weapon", cat:"hammer",  attack:21, icon:"🔨", lvReq:10 },
-  { name:"短矛",    slot:"weapon", cat:"spear",   attack:8,  icon:"🏹", lvReq:2  },
-  { name:"長矛",    slot:"weapon", cat:"spear",   attack:14, icon:"🏹", lvReq:6  },
-  { name:"龍牙矛",  slot:"weapon", cat:"spear",   attack:22, icon:"🏹", lvReq:11 },
-  { name:"漁夫三叉戟",slot:"weapon",cat:"trident", attack:9,  icon:"🔱", lvReq:3  },
-  { name:"戰士三叉戟",slot:"weapon",cat:"trident", attack:18, icon:"🔱", lvReq:9  },
-  { name:"收割鐮",  slot:"weapon", cat:"sickle",  attack:7,  icon:"☽",  lvReq:2  },
-  { name:"死亡鐮",  slot:"weapon", cat:"sickle",  attack:16, icon:"☽",  lvReq:8  },
-  { name:"死神之翼",slot:"weapon", cat:"angel",   attack:20, icon:"🪽", lvReq:10 },
-  { name:"末日使者",slot:"weapon", cat:"angel",   attack:28, icon:"🪽", lvReq:14 },
-  { name:"棍棒",    slot:"weapon", cat:"club",    attack:5,  icon:"🪵", lvReq:1  },
-  { name:"法杖",    slot:"weapon", cat:"staff",   attack:10, icon:"🪄", lvReq:3  },
-  { name:"古代法杖",slot:"weapon", cat:"staff",   attack:18, icon:"🪄", lvReq:9  },
-];
-
-const BASE_OFFHANDS: AnyList = [
-  { name:"木盾",   slot:"offhand", defense:4,  hp:10, icon:"🛡️", lvReq:1 },
-  { name:"鐵盾",   slot:"offhand", defense:8,  hp:20, icon:"🛡️", lvReq:4 },
-  { name:"塔盾",   slot:"offhand", defense:14, hp:35, icon:"🛡️", lvReq:8 },
-  { name:"龍鱗盾", slot:"offhand", defense:20, hp:50, icon:"🛡️", lvReq:12},
-  { name:"魔法典籍",slot:"offhand", attack:5,  hp:15, icon:"📖", lvReq:5 },
-];
-const BASE_HELMETS: AnyList = [
-  { name:"皮帽",   slot:"helmet", defense:3,  hp:15, icon:"⛑️", lvReq:1 },
-  { name:"鐵盔",   slot:"helmet", defense:6,  hp:22, icon:"⛑️", lvReq:4 },
-  { name:"鋼盔",   slot:"helmet", defense:10, hp:32, icon:"🪖", lvReq:8 },
-  { name:"龍骨盔", slot:"helmet", defense:15, hp:50, icon:"🪖", lvReq:12},
-];
-const BASE_ARMORS: AnyList = [
-  { name:"皮甲",   slot:"armor", defense:4,        icon:"🥋", lvReq:1 },
-  { name:"鎖甲",   slot:"armor", defense:9,        icon:"🥋", lvReq:3 },
-  { name:"板甲",   slot:"armor", defense:16,       icon:"🥋", lvReq:7 },
-  { name:"法袍",   slot:"armor", defense:5, hp:25,  icon:"👘", lvReq:2 },
-  { name:"龍鱗甲", slot:"armor", defense:22,       icon:"🥋", lvReq:12},
-];
-const BASE_GLOVES: AnyList = [
-  { name:"皮手套",  slot:"gloves", defense:2, attack:1, icon:"🧤", lvReq:1 },
-  { name:"鐵腕甲",  slot:"gloves", defense:5, attack:2, icon:"🧤", lvReq:5 },
-  { name:"爪刃手套",slot:"gloves", defense:4, attack:5, icon:"🧤", lvReq:9 },
-];
-const BASE_BOOTS: AnyList = [
-  { name:"皮靴",   slot:"boots", defense:2, speed:1, icon:"👢", lvReq:1 },
-  { name:"鐵靴",   slot:"boots", defense:5, speed:1, icon:"👢", lvReq:5 },
-  { name:"疾風靴", slot:"boots", defense:3, speed:4, icon:"👢", lvReq:9 },
-];
-const BASE_RINGS: AnyList = [
-  { name:"銅戒指",  slot:"ring", attack:2,  icon:"💍", lvReq:1 },
-  { name:"銀戒指",  slot:"ring", attack:4,  icon:"💍", lvReq:5 },
-  { name:"金戒指",  slot:"ring", hp:20,     icon:"💍", lvReq:3 },
-  { name:"寶石戒指",slot:"ring", attack:6, defense:3, icon:"💍", lvReq:9 },
-];
-const BASE_AMULETS: AnyList = [
-  { name:"骨質護符", slot:"amulet", defense:3,        icon:"📿", lvReq:1 },
-  { name:"月神護符", slot:"amulet", hp:25,            icon:"📿", lvReq:4 },
-  { name:"戰神護符", slot:"amulet", attack:5,         icon:"📿", lvReq:7 },
-  { name:"龍魂護符", slot:"amulet", attack:4, hp:30,  icon:"📿", lvReq:11},
-];
-
-const ALL_BASE_ITEMS: AnyList = [
-  ...BASE_WEAPONS, ...BASE_OFFHANDS, ...BASE_HELMETS, ...BASE_ARMORS,
-  ...BASE_GLOVES, ...BASE_BOOTS, ...BASE_RINGS, ...BASE_AMULETS,
-];
-
-function calcSellPrice(item: any) {
-  if(!item) return 0;
-  const rarMult = ({normal:1, magic:2.5, rare:6, legendary:15, mythic:35} as AnyRecord)[item.rarity||"normal"]||1;
-  const statSum = (item.attack||0)+(item.defense||0)+(item.hp||0)*0.4+(item.speed||0)*2;
-  const lvMult  = item.itemLevel ? (1 + item.itemLevel*0.05) : 1;
-  if(item.type==="potion") return Math.max(5, Math.floor(item.cost*0.4||10));
-  if(item.type==="merc_scroll") return Math.floor(30 * rarMult);
-  return Math.max(5, Math.floor(statSum * rarMult * lvMult * 0.4));
-}
-
 function genShopItem(playerLevel: any, slotHint: any = null) {
   const slots = ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"];
   const slot = slotHint || slots[Math.floor(Math.random()*slots.length)];
   const pool  = ALL_BASE_ITEMS.filter(b=>b.slot===slot && b.lvReq <= playerLevel+3);
   const base  = pool.length ? pool[Math.floor(Math.random()*pool.length)]
                              : ALL_BASE_ITEMS.find(b=>b.slot===slot) || ALL_BASE_ITEMS[0];
-  const rar   = rollRarity(Math.min(0.4, playerLevel*0.01));
+  const rar = rollRarity(Math.min(0.4, playerLevel*0.01));
   const aff: any[]   = rollAffixes(base.slot, rar, playerLevel);
   const name  = buildName(base, rar, aff);
   const bon: AnyRecord   = {attack:0,defense:0,hp:0,speed:0};
@@ -245,7 +102,7 @@ function genShopItem(playerLevel: any, slotHint: any = null) {
     if(a.special) spec.push({type:a.special,val:a.rolledVal});
   }
   const sc = itemLevelScale(playerLevel);
-  const item = {
+  const item: AnyRecord = {
     ...base, name,
     attack:  Math.floor(((base.attack||0)+bon.attack)*sc),
     defense: Math.floor(((base.defense||0)+bon.defense)*sc),
@@ -276,7 +133,7 @@ function genAuctionItem(playerLevel: any) {
   const spec: any[] = [];
   for(const a of aff){ if(a.stat)bon[a.stat]=(bon[a.stat]||0)+a.rolledVal; if(a.special)spec.push({type:a.special,val:a.rolledVal}); }
   const sc = itemLevelScale(playerLevel);
-  const auctionItem = {
+  const auctionItem: AnyRecord = {
     ...base, name,
     attack:  Math.floor(((base.attack||0)+bon.attack)*sc),
     defense: Math.floor(((base.defense||0)+bon.defense)*sc),
@@ -299,42 +156,14 @@ function genAuctionItem(playerLevel: any) {
   };
 }
 
-const RARITIES: AnyList = [
-  { id:"normal",    label:"普通", weight:50, color:"#c8c8b0", glow:"",                      maxAffixes:0 },
-  { id:"magic",     label:"魔法", weight:28, color:"#4caf50", glow:"0 0 8px #4caf5066",     maxAffixes:2 },
-  { id:"rare",      label:"稀有", weight:14, color:"#4a9fd4", glow:"0 0 8px #4a9fd466",     maxAffixes:4 },
-  { id:"legendary", label:"傳說", weight:5,  color:"#9c50d4", glow:"0 0 10px #9c50d455",    maxAffixes:6 },
-  { id:"mythic",    label:"神話", weight:3,  color:"#e07020", glow:"0 0 14px #e0702055",    maxAffixes:8 },
-];
-
-const getRarity = (id: any) => RARITIES.find((r: any)=>r.id===id) || RARITIES[0];
+const getRarity = (id: any): any => RARITIES.find((r: any)=>r.id===id) || RARITIES[0];
 
 function itemLevelScale(playerLevel: any) {
   const tier = Math.floor(playerLevel / 10);
   return Math.pow(1.25, tier);
 }
 
-const MERC_BASES: AnyList = [
-  { id:"soldier",  name:"退役士兵",   icon:"🗡️", attack:8,  defense:3,  hp:60,  heal:0, desc:"穩定輸出型步兵",   grade:"normal"    },
-  { id:"archer",   name:"流浪弓手",   icon:"🏹", attack:14, defense:1,  hp:40,  heal:0, desc:"高攻擊低防禦",     grade:"magic"     },
-  { id:"smith",    name:"矮人鐵匠",   icon:"⚒️", attack:6,  defense:12, hp:100, heal:0, desc:"高防替你擋傷",     grade:"rare"      },
-  { id:"mage",     name:"侏儒法師",   icon:"🧙", attack:20, defense:2,  hp:35,  heal:0, desc:"最高傷害輸出",     grade:"legendary" },
-  { id:"healer",   name:"精靈治癒師", icon:"🧝", attack:5,  defense:4,  hp:50,  heal:8, desc:"每回合回復 8HP",   grade:"mythic"    },
-  { id:"berserker",name:"狂戰士",     icon:"🪖", attack:25, defense:5,  hp:80,  heal:0, desc:"狂暴：攻擊+30%",   grade:"legendary" },
-  { id:"paladin",  name:"聖騎士",     icon:"⚜️", attack:12, defense:15, hp:120, heal:5, desc:"聖護：防禦+回血",  grade:"mythic"    },
-  { id:"assassin", name:"暗殺者",     icon:"🌑", attack:30, defense:2,  hp:30,  heal:0, desc:"暗殺：首攻×2",     grade:"mythic"    },
-];
-
-const MERC_SCROLL_AFFIXES: AnyList = [
-  { id:"ms_atk",   tag:"勇武", stat:"attack",  min:3,  max:15 },
-  { id:"ms_def",   tag:"堅壁", stat:"defense", min:2,  max:10 },
-  { id:"ms_hp",    tag:"強健", stat:"hp",      min:10, max:50 },
-  { id:"ms_heal",  tag:"治癒", stat:"heal",    min:1,  max:6  },
-  { id:"ms_all",   tag:"精英", special:"all",  val:0.15 },
-  { id:"ms_first", tag:"先鋒", special:"first", val:0.25 },
-];
-
-function genMercScroll(playerLevel: any, forceGrade: any = null) {
+function genMercScroll(playerLevel: any, forceGrade: any = null): any {
   const bonus = Math.min(0.5, playerLevel * 0.015);
   const rar = forceGrade ? getRarity(forceGrade) : rollRarity(bonus);
   const eligBases = MERC_BASES.filter(b => {
@@ -383,195 +212,14 @@ function genMercScroll(playerLevel: any, forceGrade: any = null) {
   };
 }
 
-const SG: AnyRecord = {
-  weapon:  ["weapon"],
-  armor:   ["armor","offhand","helmet","gloves","boots"],
-  jewelry: ["ring","amulet"],
-  all:     ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"],
-};
-
-const AFFIXES: AnyList = [
-  { id:"sharp",     tag:"鋒利",   type:"prefix", stat:"attack",  min:3,  max:10, slots:SG.weapon },
-  { id:"heavy",     tag:"沉重",   type:"prefix", stat:"attack",  min:5,  max:14, slots:SG.weapon },
-  { id:"blessed",   tag:"神佑",   type:"prefix", stat:"attack",  min:8,  max:20, slots:SG.weapon },
-  { id:"brutal",    tag:"殘酷",   type:"prefix", stat:"attack",  min:12, max:28, slots:SG.weapon },
-  { id:"sturdy",    tag:"堅固",   type:"prefix", stat:"defense", min:3,  max:8,  slots:SG.armor  },
-  { id:"fortified", tag:"強化",   type:"prefix", stat:"defense", min:5,  max:14, slots:[...SG.armor,...SG.weapon] },
-  { id:"vital",     tag:"活力",   type:"prefix", stat:"hp",      min:15, max:45, slots:SG.all    },
-  { id:"swift",     tag:"迅捷",   type:"prefix", stat:"speed",   min:2,  max:7,  slots:[...SG.weapon,...SG.armor,"boots"] },
-  { id:"power",     tag:"力量",   type:"prefix", stat:"attack",  min:4,  max:12, slots:[...SG.jewelry] },
-  { id:"resilient", tag:"韌性",   type:"prefix", stat:"defense", min:3,  max:9,  slots:[...SG.jewelry] },
-  { id:"lifesteal", tag:"吸血",   type:"suffix", special:"lifesteal", val:[3,10],  slots:SG.weapon },
-  { id:"thorns",    tag:"荊棘",   type:"suffix", special:"thorns",    val:[2,8],   slots:SG.armor  },
-  { id:"crit",      tag:"爆擊",   type:"suffix", special:"crit",      val:[5,25],  slots:SG.weapon },
-  { id:"regen",     tag:"回復",   type:"suffix", special:"regen",     val:[2,6],   slots:[...SG.armor,...SG.jewelry] },
-  { id:"fury",      tag:"狂怒",   type:"suffix", special:"fury",      val:[4,12],  slots:SG.weapon },
-  { id:"pierce",    tag:"穿透",   type:"suffix", special:"pierce",    val:[10,30], slots:SG.weapon },
-  { id:"vampiric",  tag:"吸魂",   type:"suffix", special:"vampiric",  val:[5,15],  slots:[...SG.armor,...SG.jewelry] },
-  { id:"reflect",   tag:"反射",   type:"suffix", special:"reflect",   val:[3,10],  slots:["offhand"] },
-];
-
-const MONSTERS: AnyRecord = {
-  wolf:       { name:"餓狼",     icon:"🐺", hpM:0.8,  atkM:0.9,  defM:0.5,  trait:"swift",    traitDesc:"先手攻擊",         lore:"飢餓的野狼，速度極快"         },
-  boar:       { name:"野豬",     icon:"🐗", hpM:1.1,  atkM:1.0,  defM:0.8,  trait:"charge",   traitDesc:"第一擊傷害+30%",   lore:"憤怒衝鋒的野豬"               },
-  bandit:     { name:"山賊",     icon:"🗡️", hpM:0.9,  atkM:1.1,  defM:0.7,  trait:"dodge",    traitDesc:"20%閃避",          lore:"亡命之徒，出手狡猾"           },
-  wolfKing:   { name:"狼王",     icon:"🐺", hpM:2.5,  atkM:1.8,  defM:1.2,  trait:"howl",     traitDesc:"戰吼：攻擊+20%",   lore:"統領狼群的古老王者", boss:true },
-  goblin:     { name:"地精",     icon:"👺", hpM:0.7,  atkM:1.0,  defM:0.6,  trait:"swarm",    traitDesc:"成群時攻擊+15%",   lore:"矮小貪婪的礦坑居民"           },
-  ghostMiner: { name:"礦工亡魂", icon:"👻", hpM:0.8,  atkM:1.2,  defM:0.3,  trait:"phase",    traitDesc:"無視25%防禦",      lore:"死於坑難的礦工怨靈"           },
-  golem:      { name:"石巨人",   icon:"🪨", hpM:1.8,  atkM:0.9,  defM:1.5,  trait:"armor",    traitDesc:"防禦+50%",         lore:"礦石能量凝聚而成的巨型石人"   },
-  mineLord:   { name:"礦坑主",   icon:"⛏️", hpM:2.8,  atkM:1.6,  defM:1.8,  trait:"collapse", traitDesc:"每5回合岩石崩落",  lore:"腐化的礦坑領主", boss:true    },
-  skeleton:   { name:"骷髏兵",   icon:"💀", hpM:0.7,  atkM:0.9,  defM:0.8,  trait:"undead",   traitDesc:"30%免疫流血",      lore:"被詛咒的古代士兵"             },
-  cultist:    { name:"黑暗祭司", icon:"🧎", hpM:0.8,  atkM:1.3,  defM:0.5,  trait:"curse",    traitDesc:"詛咒：攻擊-10%",   lore:"供奉黑暗神明的祭司"           },
-  demon:      { name:"惡魔",     icon:"😈", hpM:1.2,  atkM:1.4,  defM:0.9,  trait:"fire",     traitDesc:"火焰：每回合燒傷2",lore:"從地獄召喚的低階惡魔"         },
-  templeGuard:{ name:"神殿守護者",icon:"🏛️",hpM:3.0,  atkM:2.0,  defM:1.5,  trait:"divine",   traitDesc:"神力護盾：首回合免傷",lore:"古神的最後守衛", boss:true   },
-  wyvern:     { name:"幼龍",     icon:"🐲", hpM:1.3,  atkM:1.3,  defM:1.0,  trait:"breathe",  traitDesc:"龍息：額外傷害",   lore:"尚未成年的幼龍，仍極危險"     },
-  fireGiant:  { name:"火焰巨人", icon:"🔥", hpM:2.0,  atkM:1.5,  defM:0.8,  trait:"inferno",  traitDesc:"每3回合全力一擊",  lore:"熔岩鑄造的巨人戰士"           },
-  dragonKnight:{name:"龍族武士", icon:"⚔️", hpM:1.5,  atkM:1.6,  defM:1.3,  trait:"dragonArmor",traitDesc:"鱗甲：防禦+40%",lore:"古龍麾下最強戰士"             },
-  ancientDragon:{name:"古龍",    icon:"🐉", hpM:4.0,  atkM:2.5,  defM:2.0,  trait:"dragonRage",traitDesc:"低血爆怒+60%傷害",lore:"千年古龍，大地之王", boss:true },
-  shadowBeast:{ name:"暗影獸",   icon:"🌑", hpM:1.0,  atkM:1.4,  defM:0.7,  trait:"dark",     traitDesc:"黑暗：降低視野-攻擊",lore:"黑暗中游走的詭異生物"       },
-  lich:       { name:"巫妖",     icon:"🧙", hpM:1.1,  atkM:1.8,  defM:0.6,  trait:"soulSuck", traitDesc:"吸魂：回復已損失HP的5%",lore:"追求永生的邪惡術士"       },
-  titan:      { name:"泰坦",     icon:"🗿", hpM:2.5,  atkM:1.4,  defM:2.2,  trait:"stonewall", traitDesc:"石牆：每回合回復5HP",lore:"遠古時代的神秘巨人"          },
-  abyssLord:  { name:"深淵之主", icon:"🌀", hpM:4.5,  atkM:2.8,  defM:2.0,  trait:"voidRip",  traitDesc:"虛空裂縫：無視防禦",lore:"從虛空而來的毀滅存在", boss:true},
-};
-
-const EXPEDITIONS: AnyList = [
-  { id:"e1", name:"狼群獵場",  icon:"🐺", minLv:1,  monster:"wolf",        desc:"追蹤並獵殺草原餓狼",       expMult:0.8, goldMult:0.8, lootBonus:0    },
-  { id:"e2", name:"山賊巢穴",  icon:"🗡️", minLv:2,  monster:"bandit",      desc:"清除盤踞山路的盜賊",       expMult:0.9, goldMult:1.1, lootBonus:0    },
-  { id:"e3", name:"憤怒野豬",  icon:"🐗", minLv:2,  monster:"boar",        desc:"獵殺橫衝直撞的野豬",       expMult:0.9, goldMult:0.9, lootBonus:0.05 },
-  { id:"e4", name:"礦坑地精",  icon:"👺", minLv:3,  monster:"goblin",      desc:"肅清礦坑中的地精群",       expMult:1.0, goldMult:1.0, lootBonus:0.05 },
-  { id:"e5", name:"亡魂追擊",  icon:"👻", minLv:4,  monster:"ghostMiner",  desc:"驅散礦坑中的礦工怨靈",     expMult:1.1, goldMult:0.8, lootBonus:0.10 },
-  { id:"e6", name:"骷髏哨所",  icon:"💀", minLv:5,  monster:"skeleton",    desc:"消滅神殿外的骷髏守衛",     expMult:1.0, goldMult:1.0, lootBonus:0.08 },
-  { id:"e7", name:"黑暗儀式",  icon:"🧎", minLv:6,  monster:"cultist",     desc:"阻止祭司完成黑暗儀式",     expMult:1.2, goldMult:0.9, lootBonus:0.12 },
-  { id:"e8", name:"惡魔現身",  icon:"😈", minLv:7,  monster:"demon",       desc:"討伐從地獄爬出的惡魔",     expMult:1.3, goldMult:1.0, lootBonus:0.15 },
-  { id:"e9", name:"幼龍試練",  icon:"🐲", minLv:9,  monster:"wyvern",      desc:"挑戰棲息山谷的幼龍",       expMult:1.4, goldMult:1.2, lootBonus:0.18 },
-  { id:"e10",name:"暗影獸窟",  icon:"🌑", minLv:11, monster:"shadowBeast", desc:"深入黑暗追殺暗影獸",       expMult:1.5, goldMult:1.1, lootBonus:0.20 },
-  { id:"e11",name:"巫妖的塔",  icon:"🧙", minLv:13, monster:"lich",        desc:"攻入巫妖的不死之塔",       expMult:1.8, goldMult:1.0, lootBonus:0.25 },
-  { id:"e12",name:"泰坦遺跡",  icon:"🗿", minLv:15, monster:"titan",       desc:"深入遠古遺跡對抗泰坦",     expMult:2.0, goldMult:1.5, lootBonus:0.30 },
-];
-
-const DUNGEONS: AnyList = [
-  {
-    id:1, name:"野狼森林", icon:"🌲", minLv:1,
-    lore:"古老森林中，餓狼群和山賊聯手封鎖了道路。傳說深處有一頭稱王的巨狼。",
-    waves:[
-      { label:"第一波 — 外圍", monsters:["wolf","wolf","boar"],        desc:"巡邏的狼群和野豬" },
-      { label:"第二波 — 林中", monsters:["bandit","bandit","wolf"],     desc:"山賊與狼的聯合伏擊" },
-      { label:"第三波 — 巢穴", monsters:["boar","wolf","bandit"],       desc:"守衛巢穴的精銳" },
-    ],
-    boss:"wolfKing",
-    bossIntro:"狼王現身！整片森林都在顫抖！",
-  },
-  {
-    id:2, name:"廢棄礦坑", icon:"⛏️", minLv:3,
-    lore:"古老礦坑深處藏有珍貴礦石，但礦工們的怨靈和石巨人讓探險者有去無回。",
-    waves:[
-      { label:"第一波 — 礦道入口", monsters:["goblin","goblin","goblin"],  desc:"成群的地精守衛" },
-      { label:"第二波 — 深礦通道", monsters:["ghostMiner","goblin","golem"],desc:"亡魂與石巨人聯手" },
-      { label:"第三波 — 礦坑核心", monsters:["golem","ghostMiner","goblin"],desc:"核心守衛精銳部隊" },
-    ],
-    boss:"mineLord",
-    bossIntro:"礦坑主從黑暗中現身，手持巨型鶴嘴鋤！",
-  },
-  {
-    id:3, name:"地下神殿", icon:"🏛️", minLv:6,
-    lore:"沉睡千年的古神殿突然甦醒，不死怨靈和黑暗惡魔在石柱間遊蕩，古老的守護者也再度睜眼。",
-    waves:[
-      { label:"第一波 — 神殿外庭", monsters:["skeleton","skeleton","cultist"], desc:"骷髏兵和黑暗祭司" },
-      { label:"第二波 — 祭壇大廳", monsters:["demon","cultist","skeleton"],    desc:"惡魔與祭司的聯合防線" },
-      { label:"第三波 — 聖所深處", monsters:["demon","demon","cultist"],        desc:"最強惡魔守衛隊" },
-    ],
-    boss:"templeGuard",
-    bossIntro:"神殿守護者從石像甦醒，散發神聖光輝！",
-  },
-  {
-    id:4, name:"龍穴深淵", icon:"🐉", minLv:10,
-    lore:"傳說古龍在深淵深處沉眠了三百年。牠的子嗣守護著洞穴，而覺醒的古龍將毀滅一切。",
-    waves:[
-      { label:"第一波 — 龍穴入口", monsters:["wyvern","dragonKnight"],       desc:"幼龍與龍族武士" },
-      { label:"第二波 — 熔岩走廊", monsters:["fireGiant","wyvern","wyvern"], desc:"火焰巨人和幼龍群" },
-      { label:"第三波 — 古龍前廳", monsters:["dragonKnight","dragonKnight","fireGiant"],desc:"龍族精銳" },
-    ],
-    boss:"ancientDragon",
-    bossIntro:"古龍緩跨張開雙眼，千年的怒火瞬間噴發！",
-  },
-  {
-    id:5, name:"虛空深淵", icon:"🌀", minLv:15,
-    lore:"現實世界的裂縫正在擴大。暗影獸和巫妖從裂縫中湧出，而深淵之主即將踏入這個世界。",
-    waves:[
-      { label:"第一波 — 裂縫前線", monsters:["shadowBeast","shadowBeast","lich"],  desc:"暗影獸與巫妖" },
-      { label:"第二波 — 虛空領域", monsters:["titan","shadowBeast","lich"],        desc:"泰坦帶領暗影部隊" },
-      { label:"第三波 — 深淵核心", monsters:["lich","titan","shadowBeast"],        desc:"深淵最強守衛" },
-    ],
-    boss:"abyssLord",
-    bossIntro:"深淵之主現身！虛空撕裂，現實崩潰！",
-  },
-];
-
 const DUNGEON_TIERS: AnyList = [
   { id:"normal", label:"普通", color:"#8a9070", mult:1.0,  expMult:1.0, goldMult:1.0, lootBonus:0,    minLvOffset:0 },
   { id:"hero",   label:"英雄", color:"#4a9fd4", mult:1.35, expMult:1.6, goldMult:1.4, lootBonus:0.15, minLvOffset:4 },
   { id:"legend", label:"傳說", color:"#d4b84a", mult:1.75, expMult:2.5, goldMult:2.0, lootBonus:0.28, minLvOffset:8 },
 ];
 
-const MERC_DUNGEONS: AnyList = [
-  {
-    id:"m1", label:"城鎮清剿", icon:"🏘️", minLv:1, lvBonus:0,
-    lore:"一支盜賊團盤踞城鎮，傭兵們需要正面強攻。",
-    waves:[
-      { enemies:["bandit","bandit"],         desc:"門口守衛",   mult:0.9 },
-      { enemies:["bandit","bandit","bandit"], desc:"主力盜賊隊", mult:1.0 },
-    ],
-    boss:{ name:"盜賊首領", icon:"🗡️", hpM:2.0, atkM:1.5, defM:1.0, trait:"dodge" },
-    reward:{ expMult:1.2, goldMult:1.5, scrollBonus:0.20 },
-  },
-  {
-    id:"m2", label:"礦坑奪寶", icon:"⛏️", minLv:3, lvBonus:2,
-    lore:"深層礦坑藏有寶藏，但地精大軍和石巨人在守護。",
-    waves:[
-      { enemies:["goblin","goblin","goblin"], desc:"地精前鋒隊", mult:0.9 },
-      { enemies:["goblin","golem"],           desc:"石巨人現身", mult:1.1 },
-      { enemies:["golem","goblin","goblin"],  desc:"寶藏守護者", mult:1.2 },
-    ],
-    boss:{ name:"巨型石魔", icon:"🪨", hpM:3.0, atkM:1.4, defM:2.5, trait:"armor" },
-    reward:{ expMult:1.4, goldMult:2.0, scrollBonus:0.30 },
-  },
-  {
-    id:"m3", label:"神殿淨化", icon:"🏛️", minLv:6, lvBonus:4,
-    lore:"被詛咒的神殿充滿不死怨靈，傭兵們需要徹底淨化。",
-    waves:[
-      { enemies:["skeleton","skeleton"],        desc:"骷髏前哨",   mult:1.0 },
-      { enemies:["cultist","demon"],            desc:"祭司與惡魔", mult:1.1 },
-      { enemies:["demon","demon","skeleton"],   desc:"惡魔大軍",   mult:1.2 },
-    ],
-    boss:{ name:"大惡魔君主", icon:"👿", hpM:3.5, atkM:2.0, defM:1.2, trait:"fire" },
-    reward:{ expMult:1.8, goldMult:2.5, scrollBonus:0.40 },
-  },
-  {
-    id:"m4", label:"龍巢突襲", icon:"🐉", minLv:10, lvBonus:6,
-    lore:"趁古龍沉睡之際突入龍巢，傭兵們能取多少帶多少。",
-    waves:[
-      { enemies:["wyvern","wyvern"],                    desc:"幼龍巡邏隊",   mult:1.1 },
-      { enemies:["dragonKnight","wyvern"],              desc:"龍騎士阻擊",   mult:1.2 },
-      { enemies:["fireGiant","dragonKnight","wyvern"],  desc:"龍巢核心守衛", mult:1.4 },
-    ],
-    boss:{ name:"龍騎將軍", icon:"⚔️", hpM:4.0, atkM:2.2, defM:1.8, trait:"dragonArmor" },
-    reward:{ expMult:2.2, goldMult:3.0, scrollBonus:0.50 },
-  },
-  {
-    id:"m5", label:"虛空入侵", icon:"🌀", minLv:15, lvBonus:10,
-    lore:"虛空裂縫突然開啟，高等傭兵緊急出動阻擋入侵者。",
-    waves:[
-      { enemies:["shadowBeast","shadowBeast","lich"],  desc:"虛空先鋒",     mult:1.2 },
-      { enemies:["titan","shadowBeast"],               desc:"泰坦壓陣",     mult:1.4 },
-      { enemies:["lich","lich","titan"],               desc:"巫妖與泰坦聯軍", mult:1.6 },
-    ],
-    boss:{ name:"虛空先驅", icon:"🌑", hpM:4.5, atkM:2.5, defM:2.0, trait:"voidRip" },
-    reward:{ expMult:3.0, goldMult:4.0, scrollBonus:0.70 },
-  },
-];
-
-function rollRarity(bonus: any = 0){
-  const adj=RARITIES.map(r=>({...r,weight:r.id==="normal"?Math.max(5,r.weight-bonus*80):r.weight+bonus*(r.id==="mythic"?30:r.id==="legendary"?15:5)}));
+function rollRarity(bonus: any = 0): any {
+  const adj: any[] = RARITIES.map((r: any)=>({...r,weight:r.id==="normal"?Math.max(5,r.weight-bonus*80):r.weight+bonus*(r.id==="mythic"?30:r.id==="legendary"?15:5)}));
   const total=adj.reduce((s,r)=>s+r.weight,0); let roll=Math.random()*total;
   for(const r of adj){roll-=r.weight;if(roll<=0)return r;} return adj[0];
 }
@@ -615,7 +263,7 @@ function genLoot(plv: any, bonus: any = 0, forcedSlot: any = null){
     base=pool.length>0 ? pool[Math.floor(Math.random()*pool.length)]
                        : ALL_BASE_ITEMS.filter(b=>b.lvReq<=plv+2)[0];
   }
-  const rar=rollRarity(bonus);
+  const rar = rollRarity(bonus);
   const aff:any[]=rollAffixes(base.slot,rar,plv);
   const name=buildName(base,rar,aff);
   const bon: AnyRecord={attack:0,defense:0,hp:0,speed:0};
@@ -780,43 +428,6 @@ function enemyAttackPlayer(enemy: any, pDef: any, specials: any, np: any, pMhp: 
 // QUEST SYSTEM
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Quest reward types
-const QR: AnyRecord = {
-  gold:  (v: any)=>({ type:"gold",  value:v, label:`🪙 ${v} 金幣` }),
-  exp:   (v: any)=>({ type:"exp",   value:v, label:`✨ ${v} EXP` }),
-  item:  (r: any)=>({ type:"item",  rarity:r, label:`🎁 ${r==="mythic"?"神話":r==="legendary"?"傳說":r==="rare"?"稀有":"魔法"}裝備×1` }),
-  scroll:(r: any)=>({ type:"scroll",rarity:r, label:`📜 ${r==="mythic"?"神話":r==="legendary"?"傳說":r==="rare"?"稀有":"魔法"}傭兵捲軸×1` }),
-};
-
-// Quest definitions: id, type, title, desc, goal field, target, rewards
-const QUEST_DEFS: AnyRecord = {
-  // ── Daily (每天重置) ──────────────────────────────────────────────────────
-  d1:  { cat:"daily", icon:"🗡", title:"今日狩獵",       desc:"完成 3 次探險",         field:"totalExpeditions", target:3,  rewards:[QR.gold(80),  QR.exp(120)]  },
-  d2:  { cat:"daily", icon:"⚔", title:"副本出征",       desc:"完成 1 個副本",         field:"totalDungeons",    target:1,  rewards:[QR.gold(150), QR.exp(200)]  },
-  d3:  { cat:"daily", icon:"💀", title:"每日殺戮",       desc:"擊殺 10 隻怪物",        field:"totalKills",       target:10, rewards:[QR.gold(60),  QR.exp(80)]   },
-  d4:  { cat:"daily", icon:"🏟", title:"競技場試煉",     desc:"贏得 1 場競技場對決",   field:"totalArenaWins",   target:1,  rewards:[QR.gold(200), QR.exp(150)]  },
-  d5:  { cat:"daily", icon:"🪙", title:"財富積累",       desc:"賺取 500 金幣",         field:"totalGoldEarned",  target:500,rewards:[QR.exp(100),  QR.item("magic")] },
-
-  // ── Weekly (每週重置) ────────────────────────────────────────────────────
-  w1:  { cat:"weekly", icon:"🏆", title:"周冠軍",        desc:"贏得 5 場競技場",       field:"totalArenaWins",   target:5,  rewards:[QR.gold(500),  QR.exp(600),   QR.item("rare")]     },
-  w2:  { cat:"weekly", icon:"🐉", title:"副本征服者",    desc:"完成 5 個副本",         field:"totalDungeons",    target:5,  rewards:[QR.gold(400),  QR.exp(500),   QR.scroll("rare")]   },
-  w3:  { cat:"weekly", icon:"⚒", title:"鍛造狂人",      desc:"強化裝備 10 次",        field:"totalEnhances",    target:10, rewards:[QR.gold(300),  QR.item("rare")]                     },
-  w4:  { cat:"weekly", icon:"💪", title:"訓練達人",      desc:"訓練屬性 8 次",         field:"totalTrains",      target:8,  rewards:[QR.gold(400),  QR.exp(400),   QR.item("legendary")]},
-  w5:  { cat:"weekly", icon:"🏴", title:"傭兵統帥",      desc:"完成 3 個傭兵副本",     field:"totalMercRuns",    target:3,  rewards:[QR.gold(350),  QR.scroll("legendary")]              },
-
-  // ── Achievement (永久里程碑) ─────────────────────────────────────────────
-  a1:  { cat:"achieve", icon:"🌟", title:"初出茅廬",     desc:"達到 Lv.5",             field:"highestLevel",     target:5,  rewards:[QR.gold(200),  QR.exp(300)]                         },
-  a2:  { cat:"achieve", icon:"⭐", title:"戰場老兵",     desc:"達到 Lv.15",            field:"highestLevel",     target:15, rewards:[QR.gold(500),  QR.exp(800),   QR.item("rare")]     },
-  a3:  { cat:"achieve", icon:"💫", title:"傳說鬥士",     desc:"達到 Lv.30",            field:"highestLevel",     target:30, rewards:[QR.gold(1000), QR.exp(2000),  QR.item("legendary")]},
-  a4:  { cat:"achieve", icon:"💀", title:"屠夫",         desc:"累計擊殺 100 隻怪物",   field:"totalKills",       target:100,rewards:[QR.gold(300),  QR.item("rare")]                     },
-  a5:  { cat:"achieve", icon:"☠", title:"死神",          desc:"累計擊殺 1000 隻怪物",  field:"totalKills",       target:1000,rewards:[QR.gold(800), QR.item("legendary")]                },
-  a6:  { cat:"achieve", icon:"👑", title:"Boss獵人",     desc:"擊殺 10 個 Boss",       field:"totalBossKills",   target:10, rewards:[QR.gold(400),  QR.exp(600),   QR.item("legendary")]},
-  a7:  { cat:"achieve", icon:"🏅", title:"競技場新星",   desc:"贏得 10 場競技場",      field:"totalArenaWins",   target:10, rewards:[QR.gold(400),  QR.exp(500),   QR.scroll("rare")]   },
-  a8:  { cat:"achieve", icon:"🥇", title:"競技場王者",   desc:"贏得 50 場競技場",      field:"totalArenaWins",   target:50, rewards:[QR.gold(1000), QR.scroll("mythic")]                 },
-  a9:  { cat:"achieve", icon:"⚒", title:"鍛造大師",     desc:"成功強化到 +7 以上",    field:"totalEnhances",    target:1,  rewards:[QR.gold(500),  QR.item("legendary")],special:"enh7"},
-  a10: { cat:"achieve", icon:"💎", title:"神話收藏家",   desc:"擁有 3 件神話裝備",     field:"totalKills",       target:1,  rewards:[QR.gold(800),  QR.scroll("mythic")],  special:"3mythic"},
-};
-
 // Generate initial quest progress state
 function initQuestState() {
   const today = new Date().toISOString().slice(0,10);
@@ -868,10 +479,6 @@ function isQuestDone(questId: any, playerStats: any, questState: any) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ARENA SYSTEM — PvP opponents, injury timer, gold plunder
 // ══════════════════════════════════════════════════════════════════════════════
-const ARENA_FIRST_NAMES: AnyList = ["鐵拳","烈焰","暗影","血刃","雷霆","冰霜","狂狼","死神","石壁","毒牙","金鷹","黑熊","赤龍","幽靈","鋼爪"];
-const ARENA_LAST_NAMES: AnyList  = ["戰士","屠夫","獵人","武者","刺客","法師","騎士","守衛","劊子手","征服者","破壞者","裁判者"];
-const ARENA_TITLES      = ["不敗的","嗜血的","冷酷的","無情的","狂暴的","沉默的","傳奇的","恐怖的","古老的","神秘的"];
-
 // Generate a fake PvP opponent matching roughly the player's level
 function genArenaOpponent(playerLevel: any) {
   const firstName = ARENA_FIRST_NAMES[Math.floor(Math.random()*ARENA_FIRST_NAMES.length)];
@@ -2624,7 +2231,8 @@ function App() {
     const cost = trainCost(player.level, current);
     if(player.gold < cost) return;
     if(player.gold - cost < 50) { alert(`訓練費用 ${cost}，會讓金幣低於 50，請先賺更多金幣！`); return; }
-    const isMhp = (TRAIN_STATS.find(s=>s.id===statId)&&TRAIN_STATS.find(s=>s.id===statId).hpStat);
+    const trainStat = TRAIN_STATS.find(s=>s.id===statId);
+    const isMhp = trainStat && trainStat.hpStat;
     setPlayer(p=>{
       const np={...p, gold:p.gold-cost, [statId]:(p[statId]||0)+1, totalTrains:(p.totalTrains||0)+1};
       if(isMhp) np.hp=Math.min(np.hp+3, cMhp(np));
@@ -3267,7 +2875,7 @@ function App() {
                           : replay.isExpedition
                           ? `🗺 ${(replay.expedition&&replay.expedition.name)}`
                           : replay.isMerc
-                            ? `🏴 ${(MERC_DUNGEONS.find(d=>d.id===replay.mercDungeonId)&&MERC_DUNGEONS.find(d=>d.id===replay.mercDungeonId).label)||"傭兵副本"}`
+                            ? `🏴 ${MERC_DUNGEONS.find((d)=>d.id===replay.mercDungeonId)?.label||"傭兵副本"}`
                           : replay.dungeon?`${replay.dungeon.icon} ${replay.dungeon.name}`:"⚔"}
                         {!replay.isExpedition&&!replay.isMerc&&!replay.isArena&&` · ${(replay.tier&&replay.tier.label)}`}
                       </div>
@@ -3334,12 +2942,15 @@ function App() {
                         </button>
                       </div>
                       <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
-                        {["all","weapon","offhand","armor","helmet","gloves","boots","ring","amulet"].map(f=>(
-                          <div key={f} className={`wcat-btn${shopFilter===f?" active":""}`} onClick={()=>setShopFilter(f)}
-                            style={{fontSize:10,padding:"3px 8px"}}>
-                            {f==="all"?"全部":(EQUIP_SLOTS.find(s=>s.id===f)?EQUIP_SLOTS.find(s=>s.id===f).label:f)}
-                          </div>
-                        ))}
+                        {["all","weapon","offhand","armor","helmet","gloves","boots","ring","amulet"].map(f=>{
+                          const slotDef = EQUIP_SLOTS.find(s=>s.id===f);
+                          return (
+                            <div key={f} className={`wcat-btn${shopFilter===f?" active":""}`} onClick={()=>setShopFilter(f)}
+                              style={{fontSize:10,padding:"3px 8px"}}>
+                              {f==="all"?"全部":(slotDef ? slotDef.label : f)}
+                            </div>
+                          );
+                        })}
                       </div>
                       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
                         {[{name:"小型回復藥",icon:"🧪",heal:30,cost:25},{name:"大型回復藥",icon:"⚗️",heal:80,cost:60}].map((p,i)=>(
