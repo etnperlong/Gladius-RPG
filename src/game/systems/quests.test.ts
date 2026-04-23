@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { QUEST_DEFS } from "../data/quests";
+import { checkQuestReset, getQuestProgress, getWeekKey, initQuestState, isQuestDone } from "./quests";
 import * as questSystem from "./quests";
 
 function getHelpers() {
@@ -127,5 +128,44 @@ describe("quest system", () => {
         { progress: { w3: { collected: false, baseVal: 1 } } },
       ),
     ).toBe(true);
+  });
+});
+
+describe("checkQuestReset", () => {
+  it("resets daily quest bases when the date has changed", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-24T00:00:00Z"));
+
+    const oldState = {
+      dailyDate: "2026-04-23",
+      weeklyDate: "2026-W17",
+      progress: { d3: { collected: true, baseVal: 0 } },
+    };
+    const player = { totalKills: 10 };
+
+    const newState = checkQuestReset(oldState, player);
+
+    expect(newState.dailyDate).toBe("2026-04-24");
+    expect(newState.progress.d3.collected).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it("returns the same object reference when nothing has changed", () => {
+    vi.useFakeTimers();
+    const today = "2026-04-24";
+    vi.setSystemTime(new Date(`${today}T00:00:00Z`));
+
+    const state = {
+      dailyDate: today,
+      weeklyDate: getWeekKey(),
+      progress: { d3: { collected: false, baseVal: 0 } },
+    };
+    const player = { totalKills: 5 };
+
+    const result = checkQuestReset(state, player);
+    expect(result).toBe(state);
+
+    vi.useRealTimers();
   });
 });

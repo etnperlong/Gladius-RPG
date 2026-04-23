@@ -60,3 +60,32 @@ export function isQuestDone(questId: any, playerStats: any, questState: any) {
 
   return getQuestProgress(questId, playerStats, questState) >= def.target;
 }
+
+export function checkQuestReset(questState: any, player: any): any {
+  const today = new Date().toISOString().slice(0, 10);
+  const week = getWeekKey();
+  let newQs = { ...questState, progress: { ...questState.progress } };
+  let changed = false;
+
+  if (questState.dailyDate !== today) {
+    Object.keys(QUEST_DEFS).forEach((id) => {
+      if (QUEST_DEFS[id].cat === "daily") {
+        newQs.progress[id] = { collected: false, baseVal: player[QUEST_DEFS[id].field] || 0 };
+      }
+    });
+    newQs.dailyDate = today;
+    changed = true;
+  }
+
+  if (questState.weeklyDate !== week) {
+    Object.keys(QUEST_DEFS).forEach((id) => {
+      if (QUEST_DEFS[id].cat === "weekly") {
+        newQs.progress[id] = { collected: false, baseVal: player[QUEST_DEFS[id].field] || 0 };
+      }
+    });
+    newQs.weeklyDate = week;
+    changed = true;
+  }
+
+  return changed ? newQs : questState;
+}
