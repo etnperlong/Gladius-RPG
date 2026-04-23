@@ -11,7 +11,43 @@ export const EQUIPMENT_SLOT_IDS = [
 
 export type EquipmentSlotId = (typeof EQUIPMENT_SLOT_IDS)[number];
 
-export type RuntimeItem = Record<string, any>;
+export type RuntimeSpecial = {
+  type?: string;
+  val?: number;
+  [key: string]: unknown;
+};
+
+export type RuntimeAffix = {
+  id?: string;
+  tag?: string;
+  stat?: string;
+  special?: string;
+  rolledVal?: number;
+  [key: string]: unknown;
+};
+
+export type RuntimeItem = {
+  uid?: number | string;
+  name?: string;
+  icon?: string;
+  slot?: string;
+  type?: string;
+  rarity?: string;
+  cat?: string;
+  attack?: number;
+  defense?: number;
+  hp?: number;
+  speed?: number;
+  heal?: number;
+  enhLv?: number;
+  itemLevel?: number;
+  cost?: number;
+  title?: string;
+  equipment?: RuntimeEquipment;
+  affixes?: RuntimeAffix[];
+  specials?: RuntimeSpecial[];
+  [key: string]: unknown;
+};
 
 export type RuntimeEquipment = Record<EquipmentSlotId, RuntimeItem | null>;
 
@@ -31,7 +67,7 @@ export type RuntimeQuestState = {
   weeklyDate: string;
 };
 
-export type RuntimeArenaOpponent = Record<string, any> & {
+export type RuntimeArenaOpponent = {
   id: number;
   name: string;
   title: string;
@@ -46,6 +82,7 @@ export type RuntimeArenaOpponent = Record<string, any> & {
   wcKey: string;
   wins: number;
   losses: number;
+  [key: string]: unknown;
 };
 
 export type RuntimeArenaState = {
@@ -55,7 +92,7 @@ export type RuntimeArenaState = {
   arenaLastDate: string;
 };
 
-export type RuntimeReplay = Record<string, any> & {
+export type RuntimeReplay = {
   lines: RuntimeLogEntry[];
   cursor: number;
   drops: RuntimeItem[];
@@ -68,9 +105,10 @@ export type RuntimeReplay = Record<string, any> & {
   expedition?: RuntimeItem | null;
   mercDungeonId?: string;
   opponent?: RuntimeArenaOpponent | null;
+  [key: string]: unknown;
 };
 
-export type RuntimePlayer = Record<string, any> & {
+export type RuntimePlayer = {
   name: string;
   level: number;
   exp: number;
@@ -96,6 +134,7 @@ export type RuntimePlayer = Record<string, any> & {
   totalTrains: number;
   totalMercRuns: number;
   highestLevel: number;
+  [key: string]: unknown;
 };
 
 export type GameSave = {
