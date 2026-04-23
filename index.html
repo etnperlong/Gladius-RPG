@@ -10,55 +10,6 @@
       href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap"
       rel="stylesheet"
     />
-    <style>
-      body {
-        margin: 0;
-        background: #100c07;
-      }
-
-      #root {
-        min-height: 100vh;
-      }
-
-      #loading {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        background: #100c07;
-        font-family: "Cinzel Decorative", serif;
-        color: #c8961e;
-        font-size: 20px;
-        letter-spacing: 4px;
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      .load-bar {
-        width: 200px;
-        height: 3px;
-        background: #2a1a08;
-        border-radius: 2px;
-        overflow: hidden;
-      }
-
-      .load-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #8b5a14, #e8c050, #8b5a14);
-        background-size: 200% 100%;
-        animation: loadAnim 1s linear infinite;
-      }
-
-      @keyframes loadAnim {
-        0% {
-          background-position: 100%;
-        }
-
-        100% {
-          background-position: -100%;
-        }
-      }
-    </style>
   </head>
   <body>
     <div id="loading">

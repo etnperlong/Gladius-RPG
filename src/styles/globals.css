@@ -8,6 +8,10 @@ body,
   min-height: 100%;
 }
 
+#root {
+  min-height: 100vh;
+}
+
 body {
   margin: 0;
   background:
@@ -26,6 +30,45 @@ textarea {
 
 a {
   color: inherit;
+}
+
+#loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #100c07;
+  font-family: var(--font-display);
+  color: #c8961e;
+  font-size: 20px;
+  letter-spacing: 4px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.load-bar {
+  width: 200px;
+  height: 3px;
+  background: #2a1a08;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.load-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5a14, #e8c050, #8b5a14);
+  background-size: 200% 100%;
+  animation: loadAnim 1s linear infinite;
+}
+
+@keyframes loadAnim {
+  0% {
+    background-position: 100%;
+  }
+
+  100% {
+    background-position: -100%;
+  }
 }
 
 .app-shell {
