@@ -64,6 +64,58 @@ describe("migrateGameState", () => {
     expect(save.player).toEqual(INITIAL_PLAYER);
     expect(save.inventory).toEqual([]);
   });
+
+  it("falls back to defaults for invalid scalar player field types", () => {
+    const save = migrateGameState({
+      player: {
+        name: 123,
+        level: "9",
+        gold: Number.NaN,
+        attack: Infinity,
+        defense: 14,
+      },
+    });
+
+    expect(save.player.name).toBe(INITIAL_PLAYER.name);
+    expect(save.player.level).toBe(INITIAL_PLAYER.level);
+    expect(save.player.gold).toBe(INITIAL_PLAYER.gold);
+    expect(save.player.attack).toBe(INITIAL_PLAYER.attack);
+    expect(save.player.defense).toBe(14);
+  });
+
+  it("ignores unknown equipment slots during migration", () => {
+    const save = migrateGameState({
+      player: {
+        equipment: {
+          weapon: { uid: "blade-1", name: "短劍" },
+          relic: { uid: "relic-1", name: "未知聖物" },
+        },
+      },
+    });
+
+    expect(save.player.equipment).toEqual({
+      ...INITIAL_EQUIPMENT,
+      weapon: { uid: "blade-1", name: "短劍" },
+    });
+    expect("relic" in save.player.equipment).toBe(false);
+  });
+
+  it("keeps only object inventory entries during migration", () => {
+    const save = migrateGameState({
+      inventory: [
+        { uid: "loot-1", name: "戰利品" },
+        null,
+        "bad-entry",
+        7,
+        { uid: "loot-2", name: "皮甲" },
+      ],
+    });
+
+    expect(save.inventory).toEqual([
+      { uid: "loot-1", name: "戰利品" },
+      { uid: "loot-2", name: "皮甲" },
+    ]);
+  });
 });
 
 describe("loadGameState", () => {

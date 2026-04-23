@@ -13,7 +13,7 @@ export type EquipmentSlotId = (typeof EQUIPMENT_SLOT_IDS)[number];
 
 export type RuntimeItem = Record<string, unknown>;
 
-export type RuntimeEquipment = Record<string, RuntimeItem | null>;
+export type RuntimeEquipment = Record<EquipmentSlotId, RuntimeItem | null>;
 
 export type RuntimePlayer = Record<string, unknown> & {
   name: string;
