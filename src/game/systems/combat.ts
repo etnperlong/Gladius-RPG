@@ -717,3 +717,34 @@ export function simulateMercRun(dungeonId: any, initPlayer: any, mercs: any, dep
   log.push({ txt: `📊 ${won ? "勝利" : "落敗"} · 造成${totalDmgDealt} · 承受${totalDmgTaken} · 掉落${drops.length}件`, type: won ? "win" : "lose" });
   return { log, finalPlayer: np, drops, won };
 }
+
+export function runCombat(player: any, enemy: any) {
+  const pAtk = cAtk(player);
+  const pDef = cDef(player);
+  const pMhp = cMhp(player);
+  const pSpd = cSpd(player);
+  const eSpd = enemy.speed ?? 1;
+  const specials = gSpec(player);
+  const wc = getWeaponCat(player);
+  const log: string[] = [];
+  const bleedRef = { val: 0 };
+
+  log.push(`⚔️ 戰鬥開始！你 vs ${enemy.name}`);
+  log.push(`⚡ 速度比較：你 ${pSpd} vs ${enemy.name} ${eSpd}${pSpd > eSpd ? "（你的速度更快，先手攻擊）" : ""}`);
+
+  const result = fightMonster(enemy, { ...player }, pAtk, pDef, pMhp, specials, wc, log as any, bleedRef);
+  const defeated = result.won;
+  const outcome = defeated ? "win" : "loss";
+
+  return {
+    outcome,
+    kills: defeated ? [{ enemyId: enemy.id, enemyName: enemy.name, count: 1 }] : [],
+    rewards: {
+      exp: defeated ? enemy.expReward ?? 0 : 0,
+      gold: defeated ? enemy.goldReward ?? 0 : 0,
+      loot: [],
+    },
+    log,
+    player: result.np,
+  };
+}
