@@ -1,39 +1,67 @@
 # ⚔ Gladius RPG
 
-A nostalgic text-based RPG built with React and AI (Vibe Coding). Features dynamic combat, randomized loot, and inventory management.
+A browser-based text RPG with turn-based combat, randomized loot, quests, arena battles, and inventory progression. The current migrated runtime now runs through Parcel + React + TypeScript while legacy standalone files remain in the repo as behavior references.
 
-## 🎮 Play Now
+## 🎮 Run The Game
 
-Open `index.html` in your browser — no installation required!
+Install dependencies:
 
-> Or play online via [GitHub Pages](https://ssps6210.github.io/Gladius-RPG)
+```bash
+npm install
+```
+
+Start the Parcel dev server:
+
+```bash
+npm run dev
+```
+
+Build a production bundle:
+
+```bash
+npm run build
+```
+
+Run type-checking:
+
+```bash
+npm run typecheck
+```
+
+Run tests:
+
+```bash
+npx vitest run
+```
 
 ## ✨ Features
 
-- ⚔️ Dynamic turn-based combat with weapon traits
-- 🎲 Randomized loot and equipment system
-- 🧤 8-slot equipment (weapon, offhand, helmet, armor, gloves, boots, ring, amulet)
-- 💀 Unique weapon types: sword, dagger, axe, hammer, spear, trident, sickle, staff, and more
-- 🌐 Traditional Chinese UI
+- Dynamic turn-based combat with weapon traits and battle logs
+- Randomized loot, enhancement, training, and inventory management
+- Expedition, dungeon, quest, arena, shop, auction, and mercenary flows
+- Traditional Chinese UI
 
 ## 🛠️ Tech Stack
 
-- React 18 (via CDN)
-- Babel Standalone (JSX in browser)
-- Pure HTML/CSS/JS — zero build step
+- React 19
+- TypeScript
+- Parcel
+- Vitest
 
-## 📁 Version History
+## 📁 Runtime Notes
+
+- `index.html` is the Parcel entry used by the migrated app.
+- Legacy standalone files such as `gladius.html`, `App.jsx`, and `gladiatus-clone.jsx` are still kept as references during the migration.
+- Historical backup variants remain in the repository and should not be treated as the active runtime.
+
+## 📁 Reference Files
 
 | File | Description |
 |------|-------------|
-| `index.html` | Latest playable version |
-| `gladius.html` | Alternate build |
+| `index.html` | Parcel entry for the current migrated runtime |
+| `gladius.html` | Legacy standalone build kept for reference |
 | `gladius-guide.txt` | Beginner's guide (Traditional Chinese) |
-| `App.jsx` / `gladiatus-clone.jsx` | React component source (versions 1–3) |
-
-## Tags
-
-`#react` `#rpg` `#browser-game` `#vibe-coding` `#education` `#javascript`
+| `App.jsx` / `gladiatus-clone.jsx` | Legacy source snapshots used as migration references |
 
 ## Disclaimer
 
