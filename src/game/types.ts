@@ -11,11 +11,11 @@ export const EQUIPMENT_SLOT_IDS = [
 
 export type EquipmentSlotId = (typeof EQUIPMENT_SLOT_IDS)[number];
 
-export type RuntimeItem = Record<string, unknown>;
+export type RuntimeItem = Record<string, any>;
 
 export type RuntimeEquipment = Record<EquipmentSlotId, RuntimeItem | null>;
 
-export type RuntimePlayer = Record<string, unknown> & {
+export type RuntimePlayer = Record<string, any> & {
   name: string;
   level: number;
   exp: number;
