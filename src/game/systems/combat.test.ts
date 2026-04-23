@@ -12,6 +12,7 @@ import {
   fightMonster,
   gSpec,
   getWeaponCat,
+  runCombat,
   simulateExpedition,
   simulateMercRun,
   simulateRun,
@@ -371,5 +372,41 @@ describe("combat system", () => {
     expect(logLines).toContain("💚治癒師回復8HP");
     expect(logLines).toContain("🔥 燒傷2");
     expect(logLines.indexOf("💚治癒師回復8HP")).toBeLessThan(logLines.indexOf("🔥 燒傷2"));
+  });
+});
+
+describe("runCombat", () => {
+  function mockFastPlayer() {
+    return createPlayer({ speed: 20, attack: 50, defense: 10, hp: 200, maxHp: 200, trainedSpd: 0 });
+  }
+
+  function mockWeakEnemy() {
+    return {
+      id: "slime",
+      name: "史萊姆",
+      attack: 1,
+      defense: 0,
+      hp: 5,
+      maxHp: 5,
+      speed: 1,
+      expReward: 10,
+      goldReward: 5,
+      trait: null,
+      isBoss: false,
+    };
+  }
+
+  it("returns structured kill records", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const result = runCombat(mockFastPlayer(), mockWeakEnemy());
+    expect(result.kills).toEqual([
+      expect.objectContaining({ enemyId: "slime", count: 1 }),
+    ]);
+  });
+
+  it("records speed-driven combat effects in result logs", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const result = runCombat(mockFastPlayer(), mockWeakEnemy());
+    expect(result.log.some((entry) => entry.includes("速度"))).toBe(true);
   });
 });
