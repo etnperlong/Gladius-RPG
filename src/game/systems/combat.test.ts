@@ -13,6 +13,7 @@ import {
   gSpec,
   getWeaponCat,
   runCombat,
+  simulateArenaBattle,
   simulateExpedition,
   simulateMercRun,
   simulateRun,
@@ -408,5 +409,34 @@ describe("runCombat", () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
     const result = runCombat(mockFastPlayer(), mockWeakEnemy());
     expect(result.log.some((entry) => entry.includes("速度"))).toBe(true);
+  });
+});
+
+describe("simulateArenaBattle", () => {
+  it("returns a win result with gold plundered when player is stronger", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const player = createPlayer({ attack: 100, defense: 50, hp: 500, maxHp: 500, trainedAtk: 0, trainedDef: 0, trainedHp: 0, trainedSpd: 0 });
+    const opponent = {
+      name: "弱雞", level: 1, tier: "weak",
+      attack: 1, defense: 0, maxHp: 5, hp: 5,
+      goldCarried: 200, wcKey: null,
+    };
+    const result = simulateArenaBattle(player, opponent);
+    expect(result.won).toBe(true);
+    expect(result.goldPlundered).toBeGreaterThan(0);
+    expect(result.log.length).toBeGreaterThan(0);
+  });
+
+  it("returns a loss result when player is weaker", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const player = createPlayer({ attack: 1, defense: 0, hp: 5, maxHp: 5, trainedAtk: 0, trainedDef: 0, trainedHp: 0, trainedSpd: 0 });
+    const opponent = {
+      name: "強敵", level: 50, tier: "strong",
+      attack: 999, defense: 500, maxHp: 9999, hp: 9999,
+      goldCarried: 500, wcKey: null,
+    };
+    const result = simulateArenaBattle(player, opponent);
+    expect(result.won).toBe(false);
+    expect(result.goldPlundered).toBe(0);
   });
 });
