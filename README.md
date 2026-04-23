@@ -40,14 +40,10 @@ Legacy note: `index.html` is no longer a standalone Babel runtime entry after th
 - Inventory interaction was exercised by equipping `皮靴`; visible defense and speed values updated in the character panel.
 - Shop flow was exercised by buying one `銅戒指` and then selling it back through the sell view.
 - Auction coverage was limited to the inspection path; listings, current bids, and disabled bid controls were confirmed, but no bid was placed because the smoke-test character did not have enough gold for the minimum bid.
-- Training flow was exercised with one HP training action; gold and max HP changed and persisted after reload.
+- Training flow was exercised with one HP training action; the forge screen rendered numeric values for `攻擊力`, `防禦力`, `生命值`, and `速度`, and the HP training update changed gold and max HP and persisted after reload.
 - Quest rendering was exercised by opening the quest tab and confirming progress values were shown.
 - Arena flow was exercised by challenging one opponent; combat report, defeat handling, and cooldown messaging all rendered.
 - Persistence was exercised by saving, reloading the page, and confirming player state plus equipped inventory restored from `localStorage`.
-
-## Known Issues
-
-- The training screen still shows `NaN` in several displayed stat rows (`攻擊力`, `防禦力`, `速度`) even though the HP training action itself executed correctly during smoke testing. This remains a follow-up item.
 
 ## 📁 Runtime Notes
 

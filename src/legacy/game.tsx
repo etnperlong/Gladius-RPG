@@ -133,6 +133,12 @@ const TRAIN_STATS: AnyList = [
   { id:"trainedSpd", label:"速度",   icon:"💨", color:"#4caf50", desc:"永久提升速度"     },
 ];
 
+export const TRAIN_STAT_DISPLAY_KEYS: AnyRecord = {
+  trainedAtk: "attack",
+  trainedDef: "defense",
+  trainedSpd: "speed",
+};
+
 function trainCost(playerLevel: any, currentTrained: any) {
   return Math.max(5, Math.floor(playerLevel * 5 + currentTrained * 8));
 }
@@ -3099,6 +3105,7 @@ function App() {
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
                     {TRAIN_STATS.map(stat=>{
                       const current=player[stat.id]||0;
+                      const displayKey=TRAIN_STAT_DISPLAY_KEYS[stat.id];
                       const cost=trainCost(player.level,current);
                       const canAfford=player.gold-cost>=50;
                       const effect=stat.hpStat?`每次+3最大HP（已訓${current}次，+${current*3}HP）`:`每次+1${stat.label}（已訓${current}次）`;
@@ -3118,7 +3125,7 @@ function App() {
                           <div style={{fontSize:12,color:"#7a6040",marginBottom:4}}>{effect}</div>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                             <div style={{fontFamily:"'Cinzel',serif",fontSize:14,color:stat.color}}>
-                              {stat.hpStat?`${player.maxHp+(current*3)}`:`${player[stat.id.replace("trained","").toLowerCase()]+(current||0)}`}
+                              {stat.hpStat?`${player.maxHp+(current*3)}`:`${(player[displayKey]||0)+(current||0)}`}
                               <span style={{fontSize:10,color:"#5a4020",marginLeft:4}}>（基礎+{current}訓練）</span>
                             </div>
                             <div style={{fontSize:12,color:canAfford?"#f0c040":"#c84040"}}>🪙{cost}</div>
