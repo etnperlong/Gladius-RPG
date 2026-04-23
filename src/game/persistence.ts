@@ -3,7 +3,14 @@ import {
   createInitialPlayer,
   STORAGE_KEYS,
 } from "./constants";
-import type { GameSave, RuntimeEquipment, RuntimeItem, RuntimePlayer } from "./types";
+import {
+  EQUIPMENT_SLOT_IDS,
+  type EquipmentSlotId,
+  type GameSave,
+  type RuntimeEquipment,
+  type RuntimeItem,
+  type RuntimePlayer,
+} from "./types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -21,6 +28,14 @@ function resolveStorage(storage?: Storage): Storage | null {
   return window.localStorage;
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isEquipmentSlotId(value: string): value is EquipmentSlotId {
+  return EQUIPMENT_SLOT_IDS.includes(value as EquipmentSlotId);
+}
+
 function mergeEquipment(equipment: unknown): RuntimeEquipment {
   if (!isRecord(equipment)) {
     return createInitialEquipment();
@@ -29,7 +44,7 @@ function mergeEquipment(equipment: unknown): RuntimeEquipment {
   const mergedEquipment = createInitialEquipment();
 
   for (const [slot, value] of Object.entries(equipment)) {
-    if (value === null || isRecord(value)) {
+    if (isEquipmentSlotId(slot) && (value === null || isRecord(value))) {
       mergedEquipment[slot] = value;
     }
   }
@@ -44,11 +59,28 @@ function mergePlayer(player: unknown): RuntimePlayer {
     return initialPlayer;
   }
 
-  return {
+  const mergedPlayer: RuntimePlayer = {
     ...initialPlayer,
-    ...player,
     equipment: mergeEquipment(player.equipment),
   };
+
+  for (const [key, value] of Object.entries(player)) {
+    if (key === "equipment") {
+      continue;
+    }
+
+    const defaultValue = initialPlayer[key as keyof RuntimePlayer];
+
+    if (typeof defaultValue === "string" && typeof value === "string") {
+      mergedPlayer[key as keyof RuntimePlayer] = value as never;
+    }
+
+    if (typeof defaultValue === "number" && isFiniteNumber(value)) {
+      mergedPlayer[key as keyof RuntimePlayer] = value as never;
+    }
+  }
+
+  return mergedPlayer;
 }
 
 function parsePlayer(storage: Storage | null): RuntimePlayer {
@@ -83,7 +115,9 @@ export function migrateGameState(save: {
 }): GameSave {
   return {
     player: mergePlayer(save.player),
-    inventory: Array.isArray(save.inventory) ? save.inventory : [],
+    inventory: Array.isArray(save.inventory)
+      ? save.inventory.filter((entry): entry is RuntimeItem => isRecord(entry))
+      : [],
   };
 }
 

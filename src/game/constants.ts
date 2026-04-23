@@ -6,7 +6,9 @@ export const STORAGE_KEYS = {
 } as const;
 
 export function createInitialEquipment(): RuntimeEquipment {
-  return Object.fromEntries(EQUIPMENT_SLOT_IDS.map((slot) => [slot, null]));
+  return Object.fromEntries(
+    EQUIPMENT_SLOT_IDS.map((slot) => [slot, null] as const),
+  ) as RuntimeEquipment;
 }
 
 export function createInitialPlayer(): RuntimePlayer {
