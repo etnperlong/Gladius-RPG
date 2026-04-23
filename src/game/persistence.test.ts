@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { INITIAL_EQUIPMENT, INITIAL_PLAYER } from "./constants";
+import { INITIAL_EQUIPMENT, INITIAL_PLAYER, TRAIN_STAT_DISPLAY_KEYS } from "./constants/index";
+import * as constantsShim from "./constants";
 import {
   clearGameState,
   loadGameState,
   migrateGameState,
   saveGameState,
-} from "./persistence";
+} from "./persistence/index";
+import * as persistenceShim from "./persistence";
 
 function createStorage(seed: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(seed));
@@ -32,6 +34,21 @@ function createStorage(seed: Record<string, string> = {}): Storage {
     },
   };
 }
+
+describe("module shims", () => {
+  it("keeps the constants shim aligned with the folder exports", () => {
+    expect(constantsShim.INITIAL_EQUIPMENT).toEqual(INITIAL_EQUIPMENT);
+    expect(constantsShim.INITIAL_PLAYER).toEqual(INITIAL_PLAYER);
+    expect(constantsShim.TRAIN_STAT_DISPLAY_KEYS).toEqual(TRAIN_STAT_DISPLAY_KEYS);
+  });
+
+  it("keeps the persistence shim aligned with the folder exports", () => {
+    expect(persistenceShim.migrateGameState).toBe(migrateGameState);
+    expect(persistenceShim.loadGameState).toBe(loadGameState);
+    expect(persistenceShim.saveGameState).toBe(saveGameState);
+    expect(persistenceShim.clearGameState).toBe(clearGameState);
+  });
+});
 
 describe("migrateGameState", () => {
   it("merges saved player data over defaults and preserves all equipment slots", () => {
