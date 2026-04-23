@@ -103,7 +103,9 @@ function parseInventory(storage: Storage | null): RuntimeItem[] {
   try {
     const parsed = JSON.parse(storage.getItem(STORAGE_KEYS.inventory) ?? "[]");
 
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is RuntimeItem => isRecord(entry))
+      : [];
   } catch {
     return [];
   }

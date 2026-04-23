@@ -7,6 +7,7 @@ import {
 import { clearGameState, loadGameState, saveGameState } from "../game/persistence";
 import type {
   RuntimeArenaOpponent,
+  RuntimeLogEntry,
   RuntimeItem,
   RuntimePlayer,
   RuntimeQuestState,
@@ -15,6 +16,57 @@ import type {
 
 type AnyRecord = Record<string, any>;
 type AnyList = any[];
+type LegacyItem = RuntimeItem & AnyRecord & {
+  uid: any;
+  name: any;
+  icon: any;
+  rarity: any;
+  cat: any;
+  attack: any;
+  defense: any;
+  hp: any;
+  speed: any;
+  heal: any;
+  enhLv: any;
+  itemLevel: any;
+  slot: any;
+  type: any;
+  cost: any;
+  affixes: any[];
+  specials: any[];
+};
+type LegacyPlayer = RuntimePlayer & AnyRecord & {
+  level: any;
+  exp: any;
+  expNeeded: any;
+  hp: any;
+  maxHp: any;
+  attack: any;
+  defense: any;
+  speed: any;
+  gold: any;
+  equipment: AnyRecord;
+};
+type LegacyQuestState = RuntimeQuestState & AnyRecord;
+type LegacyArenaOpponent = Omit<RuntimeArenaOpponent, "equipment"> & AnyRecord & {
+  equipment: AnyRecord;
+  attack: any;
+  defense: any;
+  maxHp: any;
+  hp: any;
+  goldCarried: any;
+};
+type LegacyReplay = Omit<RuntimeReplay, "drops" | "dungeon" | "tier" | "expedition" | "opponent"> & AnyRecord & {
+  lines: any[];
+  cursor: any;
+  drops: LegacyItem[];
+  won?: any;
+  dungeon?: any;
+  tier?: any;
+  expedition?: any;
+  opponent?: any;
+};
+type LootDrop = LegacyItem & { _remaining?: LegacyItem[] };
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WEAPON CATEGORIES — each has unique passive combat traits
@@ -56,13 +108,13 @@ const ENHANCE_LEVELS: AnyList = [
   { lv:10, rate:0.08, costMult:20.0, bonus:0.20 },
 ];
 
-function enhanceCost(item) {
+function enhanceCost(item: any) {
   const base = Math.max(30, calcSellPrice(item) * 1.5);
   const lvData = ENHANCE_LEVELS[(item.enhLv||0)];
   return lvData ? Math.floor(base * lvData.costMult) : 0;
 }
 
-function applyEnhanceBonus(item) {
+function applyEnhanceBonus(item: any) {
   if(!item.enhLv || item.enhLv === 0) return item;
   const totalBonus = ENHANCE_LEVELS.slice(0, item.enhLv).reduce((s,l) => s + l.bonus, 0);
   return {
@@ -81,7 +133,7 @@ const TRAIN_STATS: AnyList = [
   { id:"trainedSpd", label:"速度",   icon:"💨", color:"#4caf50", desc:"永久提升速度"     },
 ];
 
-function trainCost(playerLevel, currentTrained) {
+function trainCost(playerLevel: any, currentTrained: any) {
   return Math.max(5, Math.floor(playerLevel * 5 + currentTrained * 8));
 }
 
@@ -161,7 +213,7 @@ const ALL_BASE_ITEMS: AnyList = [
   ...BASE_GLOVES, ...BASE_BOOTS, ...BASE_RINGS, ...BASE_AMULETS,
 ];
 
-function calcSellPrice(item) {
+function calcSellPrice(item: any) {
   if(!item) return 0;
   const rarMult = {normal:1, magic:2.5, rare:6, legendary:15, mythic:35}[item.rarity||"normal"]||1;
   const statSum = (item.attack||0)+(item.defense||0)+(item.hp||0)*0.4+(item.speed||0)*2;
@@ -171,17 +223,17 @@ function calcSellPrice(item) {
   return Math.max(5, Math.floor(statSum * rarMult * lvMult * 0.4));
 }
 
-function genShopItem(playerLevel, slotHint=null) {
+function genShopItem(playerLevel: any, slotHint: any = null) {
   const slots = ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"];
   const slot = slotHint || slots[Math.floor(Math.random()*slots.length)];
   const pool  = ALL_BASE_ITEMS.filter(b=>b.slot===slot && b.lvReq <= playerLevel+3);
   const base  = pool.length ? pool[Math.floor(Math.random()*pool.length)]
                              : ALL_BASE_ITEMS.find(b=>b.slot===slot) || ALL_BASE_ITEMS[0];
   const rar   = rollRarity(Math.min(0.4, playerLevel*0.01));
-  const aff   = rollAffixes(base.slot, rar, playerLevel);
+  const aff: any[]   = rollAffixes(base.slot, rar, playerLevel);
   const name  = buildName(base, rar, aff);
   const bon   = {attack:0,defense:0,hp:0,speed:0};
-  const spec  = [];
+  const spec: any[]  = [];
   for(const a of aff){
     if(a.stat) bon[a.stat]=(bon[a.stat]||0)+a.rolledVal;
     if(a.special) spec.push({type:a.special,val:a.rolledVal});
@@ -203,7 +255,7 @@ function genShopItem(playerLevel, slotHint=null) {
   return item;
 }
 
-function genAuctionItem(playerLevel) {
+function genAuctionItem(playerLevel: any) {
   const rarPool = ["rare","legendary","mythic"];
   const forcedGrade = rarPool[Math.floor(Math.random()*rarPool.length)];
   const item = genShopItem(playerLevel);
@@ -212,10 +264,10 @@ function genAuctionItem(playerLevel) {
   const slot = slots[Math.floor(Math.random()*slots.length)];
   const pool = ALL_BASE_ITEMS.filter(b=>b.slot===slot&&b.lvReq<=playerLevel+3);
   const base = pool.length ? pool[Math.floor(Math.random()*pool.length)] : ALL_BASE_ITEMS[0];
-  const aff  = rollAffixes(base.slot, rar, playerLevel);
+  const aff: any[]  = rollAffixes(base.slot, rar, playerLevel);
   const name = buildName(base, rar, aff);
   const bon  = {attack:0,defense:0,hp:0,speed:0};
-  const spec = [];
+  const spec: any[] = [];
   for(const a of aff){ if(a.stat)bon[a.stat]=(bon[a.stat]||0)+a.rolledVal; if(a.special)spec.push({type:a.special,val:a.rolledVal}); }
   const sc = itemLevelScale(playerLevel);
   const auctionItem = {
@@ -251,7 +303,7 @@ const RARITIES: AnyList = [
 
 const getRarity = id => RARITIES.find(r=>r.id===id) || RARITIES[0];
 
-function itemLevelScale(playerLevel) {
+function itemLevelScale(playerLevel: any) {
   const tier = Math.floor(playerLevel / 10);
   return Math.pow(1.25, tier);
 }
@@ -276,7 +328,7 @@ const MERC_SCROLL_AFFIXES: AnyList = [
   { id:"ms_first", tag:"先鋒", special:"first", val:0.25 },
 ];
 
-function genMercScroll(playerLevel, forceGrade=null) {
+function genMercScroll(playerLevel: any, forceGrade: any = null) {
   const bonus = Math.min(0.5, playerLevel * 0.015);
   const rar = forceGrade ? getRarity(forceGrade) : rollRarity(bonus);
   const eligBases = MERC_BASES.filter(b => {
@@ -286,7 +338,7 @@ function genMercScroll(playerLevel, forceGrade=null) {
   });
   const chosenBase = eligBases[Math.floor(Math.random() * eligBases.length)];
   const affixCount = rar.id==="mythic"?3 : rar.id==="legendary"?2 : rar.id==="rare"?1 : 0;
-  const rolledAffixes = [];
+  const rolledAffixes: any[] = [];
   const usedAff = new Set();
   const sc = 1 + (playerLevel - 1) * 0.05;
   for (let i = 0; i < affixCount; i++) {
@@ -298,7 +350,7 @@ function genMercScroll(playerLevel, forceGrade=null) {
     else rolledAffixes.push({...a, rolledVal: a.val});
   }
   const bon = {attack:0, defense:0, hp:0, heal:0};
-  const specials = [];
+  const specials: any[] = [];
   for (const a of rolledAffixes) {
     if (a.stat) bon[a.stat] += a.rolledVal;
     if (a.special) specials.push({type:a.special, val:a.rolledVal});
@@ -512,15 +564,15 @@ const MERC_DUNGEONS: AnyList = [
   },
 ];
 
-function rollRarity(bonus=0){
+function rollRarity(bonus: any = 0){
   const adj=RARITIES.map(r=>({...r,weight:r.id==="normal"?Math.max(5,r.weight-bonus*80):r.weight+bonus*(r.id==="mythic"?30:r.id==="legendary"?15:5)}));
   const total=adj.reduce((s,r)=>s+r.weight,0); let roll=Math.random()*total;
   for(const r of adj){roll-=r.weight;if(roll<=0)return r;} return adj[0];
 }
-function rollAffixes(slot,rarity,lv){
+function rollAffixes(slot: any,rarity: any,lv: any){
   if(rarity.maxAffixes===0)return[];
   const cnt=rarity.id==="mythic"?6:rarity.id==="legendary"?4:rarity.id==="rare"?2+Math.floor(Math.random()*2):1+Math.floor(Math.random()*2);
-  const elig=AFFIXES.filter(a=>a.slots.includes(slot)); const ch=[]; const used=new Set();
+  const elig=AFFIXES.filter(a=>a.slots.includes(slot)); const ch:any[]=[]; const used=new Set();
   for(let i=0;i<cnt&&i<elig.length;i++){
     const pool=elig.filter(a=>!used.has(a.id)); if(!pool.length)break;
     const a=pool[Math.floor(Math.random()*pool.length)]; used.add(a.id);
@@ -530,7 +582,7 @@ function rollAffixes(slot,rarity,lv){
   }
   return ch;
 }
-function buildName(base,rarity,affixes){
+function buildName(base: any,rarity: any,affixes: any){
   if(rarity.id==="normal")return base.name;
   const pre=affixes.find(a=>a.type==="prefix");
   const suf=affixes.find(a=>a.type==="suffix");
@@ -540,7 +592,7 @@ function buildName(base,rarity,affixes){
   if(rarity.id==="mythic") n="【神話】"+n;
   return n;
 }
-function genLoot(plv, bonus=0, forcedSlot=null){
+function genLoot(plv: any, bonus: any = 0, forcedSlot: any = null){
   const slotGroups = {
     weapon:["weapon"], offhand:["offhand"], helmet:["helmet"],
     armor:["armor"], gloves:["gloves"], boots:["boots"],
@@ -558,10 +610,10 @@ function genLoot(plv, bonus=0, forcedSlot=null){
                        : ALL_BASE_ITEMS.filter(b=>b.lvReq<=plv+2)[0];
   }
   const rar=rollRarity(bonus);
-  const aff=rollAffixes(base.slot,rar,plv);
+  const aff:any[]=rollAffixes(base.slot,rar,plv);
   const name=buildName(base,rar,aff);
   const bon={attack:0,defense:0,hp:0,speed:0};
-  const spec=[];
+  const spec:any[]=[];
   for(const a of aff){
     if(a.stat)bon[a.stat]=(bon[a.stat]||0)+a.rolledVal;
     if(a.special)spec.push({type:a.special,val:a.rolledVal});
@@ -581,20 +633,20 @@ function genLoot(plv, bonus=0, forcedSlot=null){
   };
 }
 
-const sumEq=(player,stat)=>Object.values(player.equipment).reduce((s,e)=>{
+const sumEq=(player: any,stat: any)=>Object.values(player.equipment).reduce((s,e)=>{
   const item = e as any;
   if(!item) return s;
   const val = item.enhLv>0 ? applyEnhanceBonus(item)[stat]||0 : item[stat]||0;
   return s+val;
 },0);
-const cAtk =p=>p.attack  +(p.trainedAtk||0)+sumEq(p,"attack");
-const cDef =p=>p.defense +(p.trainedDef||0)+sumEq(p,"defense");
-const cMhp =p=>p.maxHp   +(p.trainedHp||0)*3+sumEq(p,"hp");
-const cSpd =p=>p.speed   +(p.trainedSpd||0)+sumEq(p,"speed");
-const gSpec=p=>{const s=[];Object.values(p.equipment).forEach(e=>{const item=e as any;if(item&&item.specials)s.push(...item.specials);});return s;};
-const getWeaponCat=p=>{const w=p.equipment.weapon;return w&&w.cat?WEAPON_CATEGORIES[w.cat]:null;};
+const cAtk =(p: any)=>p.attack  +(p.trainedAtk||0)+sumEq(p,"attack");
+const cDef =(p: any)=>p.defense +(p.trainedDef||0)+sumEq(p,"defense");
+const cMhp =(p: any)=>p.maxHp   +(p.trainedHp||0)*3+sumEq(p,"hp");
+const cSpd =(p: any)=>p.speed   +(p.trainedSpd||0)+sumEq(p,"speed");
+const gSpec=(p: any)=>{const s: any[]=[];Object.values(p.equipment).forEach(e=>{const item=e as any;if(item&&item.specials)s.push(...item.specials);});return s;};
+const getWeaponCat=(p: any)=>{const w=p.equipment.weapon;return w&&w.cat?WEAPON_CATEGORIES[w.cat]:null;};
 
-function applySpec(specials,dmg,target){
+function applySpec(specials: any,dmg: any,target: any){
   let healed=0,extra=0,isCrit=false;
   for(const s of specials){
     if(s.type==="lifesteal")  healed+=Math.floor(dmg*s.val/100);
@@ -606,8 +658,8 @@ function applySpec(specials,dmg,target){
   return{healed,extra,isCrit};
 }
 
-function applyWeaponTrait(cat, dmg, enemy, isFirstRound, bleedStacks){
-  let finalDmg=dmg; let log=[]; let newBleed=bleedStacks||0;
+function applyWeaponTrait(cat: any, dmg: any, enemy: any, isFirstRound: any, bleedStacks: any){
+  let finalDmg=dmg; let log:any[]=[]; let newBleed=bleedStacks||0;
   let stunned=false;
   if(!cat) return{finalDmg,log,newBleed,stunned};
 
@@ -637,7 +689,7 @@ function applyWeaponTrait(cat, dmg, enemy, isFirstRound, bleedStacks){
   return{finalDmg,log,newBleed,stunned};
 }
 
-function buildEnemy(monsterKey, playerLevel, mult=1, isBoss=false) {
+function buildEnemy(monsterKey: any, playerLevel: any, mult: any = 1, isBoss: any = false) {
   const m = MONSTERS[monsterKey] || MONSTERS.wolf;
   const sc = (0.85 + Math.random()*0.25) * mult;
   const base = playerLevel * 8 + 12;
@@ -660,7 +712,7 @@ function buildEnemy(monsterKey, playerLevel, mult=1, isBoss=false) {
   };
 }
 
-function applyMonsterTrait(enemy, dmgToEnemy, log) {
+function applyMonsterTrait(enemy: any, dmgToEnemy: any, log: any) {
   let finalDmg = dmgToEnemy;
   switch(enemy.trait) {
     case "dodge":
@@ -678,7 +730,7 @@ function applyMonsterTrait(enemy, dmgToEnemy, log) {
   return finalDmg;
 }
 
-function enemyAttackPlayer(enemy, pDef, specials, np, pMhp, log, round) {
+function enemyAttackPlayer(enemy: any, pDef: any, specials: any, np: any, pMhp: any, log: any, round: any) {
   let eDef = pDef;
   let baseDmg = Math.max(1, enemy.attack - eDef + Math.floor(Math.random()*4) - 2);
 
@@ -778,7 +830,7 @@ function getWeekKey() {
 }
 
 // Get current progress value for a quest given player stats + current session delta
-function getQuestProgress(questId, playerStats, questState) {
+function getQuestProgress(questId: any, playerStats: any, questState: any) {
   const def = QUEST_DEFS[questId];
   if(!def) return 0;
   const base = (questState.progress[questId]&&questState.progress[questId].baseVal)||0;
@@ -787,7 +839,7 @@ function getQuestProgress(questId, playerStats, questState) {
 }
 
 // Check if a quest is completed
-function isQuestDone(questId, playerStats, questState) {
+function isQuestDone(questId: any, playerStats: any, questState: any) {
   const def = QUEST_DEFS[questId];
   if(!def) return false;
   if(questState.progress[questId]&&questState.progress[questId].collected) return false; // already collected
@@ -815,7 +867,7 @@ const ARENA_LAST_NAMES: AnyList  = ["戰士","屠夫","獵人","武者","刺客"
 const ARENA_TITLES      = ["不敗的","嗜血的","冷酷的","無情的","狂暴的","沉默的","傳奇的","恐怖的","古老的","神秘的"];
 
 // Generate a fake PvP opponent matching roughly the player's level
-function genArenaOpponent(playerLevel) {
+function genArenaOpponent(playerLevel: any) {
   const firstName = ARENA_FIRST_NAMES[Math.floor(Math.random()*ARENA_FIRST_NAMES.length)];
   const lastName  = ARENA_LAST_NAMES[Math.floor(Math.random()*ARENA_LAST_NAMES.length)];
   const title     = ARENA_TITLES[Math.floor(Math.random()*ARENA_TITLES.length)];
@@ -833,7 +885,7 @@ function genArenaOpponent(playerLevel) {
                  : 1.10+Math.random()*0.30;
 
   // Generate equipped gear for the opponent
-  const equipment = { ...INITIAL_EQUIPMENT };
+  const equipment: AnyRecord = { ...INITIAL_EQUIPMENT };
   const slots = ["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"];
   // Higher level & stronger tier = better chance of good gear
   const lootBonus = (oppLv/50) + (tier==="strong"?0.25:tier==="weak"?-0.10:0.05);
@@ -1518,7 +1570,7 @@ const css=`
 .blood-div::after{left:calc(50% + 18px)}
 `;
 
-function AffixLines({ affixes }) {
+function AffixLines({ affixes }: { affixes: any[] }) {
   if (!affixes||!affixes.length) return null;
   return (
     <div className="iaf">
@@ -1537,7 +1589,7 @@ function AffixLines({ affixes }) {
   );
 }
 
-function ItemCard({ item, onEquip, onUse }) {
+function ItemCard({ item, onEquip, onUse }: { item: any; onEquip?: any; onUse?: any }) {
   const rar = getRarity(item.rarity);
   const rc = rar.color;
   const glow = rar.glow;
@@ -1589,7 +1641,7 @@ function ItemCard({ item, onEquip, onUse }) {
   );
 }
 
-function HpBar({ cur, max, color="#c83030", thin }) {
+function HpBar({ cur, max, color="#c83030", thin }: { cur: any; max: any; color?: string; thin?: any }) {
   return (
     <div className="bw">
       <div className="bl"><span>HP</span><span>{cur}/{max}</span></div>
@@ -1598,8 +1650,8 @@ function HpBar({ cur, max, color="#c83030", thin }) {
   );
 }
 
-function ReplayLog({ lines, cursor }) {
-  const ref = useRef(null);
+function ReplayLog({ lines, cursor }: { lines: RuntimeLogEntry[]; cursor: number }) {
+  const ref = useRef<HTMLDivElement | null>(null);
   const visible = lines.slice(0, cursor);
   useEffect(()=>{ if(ref.current) ref.current.scrollTop=ref.current.scrollHeight; },[cursor]);
   const COLOR = {
@@ -1632,8 +1684,8 @@ function ReplayLog({ lines, cursor }) {
   );
 }
 
-function BattleLog({ log }) {
-  const ref = useRef(null);
+function BattleLog({ log }: { log: RuntimeLogEntry[] }) {
+  const ref = useRef<HTMLDivElement | null>(null);
   useEffect(()=>{ if(ref.current) ref.current.scrollTop=ref.current.scrollHeight; },[log]);
   return (
     <div className="blog" ref={ref}>
@@ -1653,7 +1705,7 @@ function BattleLog({ log }) {
   );
 }
 
-function LootPopup({ item, onEquip, onTake, onDiscard }) {
+function LootPopup({ item, onEquip, onTake, onDiscard }: { item: any; onEquip: () => void; onTake: () => void; onDiscard: () => void }) {
   const lr = getRarity(item.rarity);
   const isMercScroll = item.type === "merc_scroll";
   return (
@@ -1702,9 +1754,9 @@ function LootPopup({ item, onEquip, onTake, onDiscard }) {
 
 // ── QuestTab component ────────────────────────────────────────────────────
 function QuestTab({ player, inventory, questState, onCollect }: {
-  player: RuntimePlayer;
-  inventory: RuntimeItem[];
-  questState: RuntimeQuestState;
+  player: LegacyPlayer;
+  inventory: LegacyItem[];
+  questState: LegacyQuestState;
   onCollect: (questId: string) => void;
 }) {
   const [catTab, setCatTab] = useState("daily");
@@ -1840,12 +1892,12 @@ function QuestTab({ player, inventory, questState, onCollect }: {
 
 // ── ArenaTab component ────────────────────────────────────────────────────
 function ArenaTab({ player, arenaOpponents, arenaInjuredUntil, arenaRefreshes, onRefresh, onFight, onInit }: {
-  player: RuntimePlayer;
-  arenaOpponents: RuntimeArenaOpponent[];
+  player: LegacyPlayer;
+  arenaOpponents: LegacyArenaOpponent[];
   arenaInjuredUntil: number;
   arenaRefreshes: number;
   onRefresh: (free: boolean) => void;
-  onFight: (opponent: RuntimeArenaOpponent) => void;
+  onFight: (opponent: LegacyArenaOpponent) => void;
   onInit: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
@@ -1973,33 +2025,33 @@ function ArenaTab({ player, arenaOpponents, arenaInjuredUntil, arenaRefreshes, o
 }
 
 function App() {
-  const [player, setPlayer] = useState<RuntimePlayer>(() => loadGameState().player);
+  const [player, setPlayer] = useState<LegacyPlayer>(() => loadGameState().player as LegacyPlayer);
 
-  const [inventory, setInventory] = useState<RuntimeItem[]>(() => loadGameState().inventory);
+  const [inventory, setInventory] = useState<LegacyItem[]>(() => loadGameState().inventory as LegacyItem[]);
 
   const [tab, setTab] = useState("dungeon");
-  const [replay, setReplay] = useState<RuntimeReplay | null>(null);
-  const replayTimerRef = useRef<number | null>(null);
-  const [lootDrop, setLootDrop] = useState(null);
-  const [selectedScrolls, setSelectedScrolls] = useState([]);
+  const [replay, setReplay] = useState<LegacyReplay | null>(null);
+  const replayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lootDrop, setLootDrop] = useState<LootDrop | null>(null);
+  const [selectedScrolls, setSelectedScrolls] = useState<any[]>([]);
   const [saveMsg, setSaveMsg] = useState("");
   const [shopFilter, setShopFilter] = useState("all");
   const [invFilter, setInvFilter] = useState("all");
-  const [shopItems, setShopItems] = useState(()=>Array.from({length:8},(_,i)=>genShopItem(1,["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"][i])));
-  const [auctionItems, setAuctionItems] = useState(()=>Array.from({length:4},()=>genAuctionItem(1)));
+  const [shopItems, setShopItems] = useState<any[]>(()=>Array.from({length:8},(_,i)=>genShopItem(1,["weapon","offhand","armor","helmet","gloves","boots","ring","amulet"][i])));
+  const [auctionItems, setAuctionItems] = useState<any[]>(()=>Array.from({length:4},()=>genAuctionItem(1)));
   const [shopTab, setShopTab] = useState("buy");
-  const [bidInput, setBidInput] = useState({});
-  const [enhanceTarget, setEnhanceTarget] = useState(null);
-  const [enhanceLog, setEnhanceLog] = useState([]);
-  const [enhanceAnim, setEnhanceAnim] = useState(null);
+  const [bidInput, setBidInput] = useState<AnyRecord>({});
+  const [enhanceTarget, setEnhanceTarget] = useState<any>(null);
+  const [enhanceLog, setEnhanceLog] = useState<string[]>([]);
+  const [enhanceAnim, setEnhanceAnim] = useState<string | null>(null);
   // ── Arena state ──────────────────────────────────────────────────────────
-  const [arenaOpponents, setArenaOpponents] = useState<RuntimeArenaOpponent[]>([]);
+  const [arenaOpponents, setArenaOpponents] = useState<LegacyArenaOpponent[]>([]);
   const [arenaInjuredUntil, setArenaInjuredUntil] = useState(0); // timestamp ms
   const [arenaRefreshes, setArenaRefreshes] = useState(5); // free refreshes per day
   const [arenaLastDate, setArenaLastDate] = useState("");
   // ── Quest state ───────────────────────────────────────────────────────────
-  const [questState, setQuestState] = useState<RuntimeQuestState>(()=>initQuestState());
-  const [questNotify, setQuestNotify] = useState(null); // {msg} toast notification // YYYY-MM-DD
+  const [questState, setQuestState] = useState<LegacyQuestState>(()=>initQuestState());
+  const [questNotify, setQuestNotify] = useState<string | null>(null); // {msg} toast notification // YYYY-MM-DD
 
   const save = useCallback(() => {
     saveGameState({ player, inventory });
@@ -2090,7 +2142,7 @@ function App() {
     let np={...initPlayer};
     const pAtk=cAtk(np),pDef=cDef(np),pMhp=cMhp(np);
     const specials=gSpec(np),wc=getWeaponCat(np);
-    const log=[],drops=[],bleedRef={val:0};
+    const log: any[]=[],drops: any[]=[],bleedRef={val:0};
     log.push({txt:`🗺 探險：${expedition.name}`,type:"title"});
     log.push({txt:`"${expedition.desc}"`,type:"info"});
     if(wc) log.push({txt:`🗡 ${wc.label} — ${wc.traitDesc}`,type:"info"});
@@ -2121,7 +2173,7 @@ function App() {
     let np={...initPlayer};
     const pAtk=cAtk(np),pDef=cDef(np),pMhp=cMhp(np);
     const specials=gSpec(np),wc=getWeaponCat(np);
-    const log=[],drops=[],bleedRef={val:0};
+    const log: any[]=[],drops: any[]=[],bleedRef={val:0};
     let totalKills=0,totalDmgDealt=0,totalDmgTaken=0,totalCrits=0;
     log.push({txt:`⚔️ 進入 ${dungeon.name}【${tier.label}】`,type:"title"});
     log.push({txt:`"${dungeon.lore}"`,type:"info"});
@@ -2184,7 +2236,7 @@ function App() {
     const pAtk=cAtk(np),pDef=cDef(np),pMhp=cMhp(np);
     const specials=gSpec(np);
     const nm=mercs.map(m=>({...m,curHp:m.hp,alive:true}));
-    const log=[],drops=[];
+    const log: any[]=[],drops: any[]=[];
     let totalDmgDealt=0,totalDmgTaken=0;
 
     log.push({txt:`🏴 傭兵副本：${dungeon.icon}${dungeon.label}`,type:"title"});
@@ -2313,7 +2365,7 @@ function App() {
     const oWc = WEAPON_CATEGORIES[opponent.wcKey];
     const pSpd = cSpd(pl);
     const oSpd = Math.floor((3 + opponent.level*0.5) * (opponent.tier==="strong"?1.2:1));
-    const log = [];
+    const log: any[] = [];
     const bleedRef = {val:0};
 
     log.push({txt:`⚔️ 競技場對決！`,type:"title"});
@@ -2366,7 +2418,7 @@ function App() {
     fp.totalGoldEarned= (fp.totalGoldEarned||0) + Math.max(0, fp.gold - player.gold);
     fp.highestLevel   = Math.max(fp.highestLevel||1, fp.level);
     setPlayer(fp);
-    setReplay({lines:result.log, cursor:0, drops:result.drops, dungeon, tier, won:result.won, pending:false, isExpedition:false});
+    setReplay({lines:result.log, cursor:0, drops:result.drops as LegacyItem[], dungeon, tier, won:result.won, pending:false, isExpedition:false} as LegacyReplay);
     setTab("battle");
     updateQuestProgress(fp, inventory);
   };
@@ -2379,7 +2431,7 @@ function App() {
     fp.totalGoldEarned  = (fp.totalGoldEarned||0) + Math.max(0, fp.gold - player.gold);
     fp.highestLevel     = Math.max(fp.highestLevel||1, fp.level);
     setPlayer(fp);
-    setReplay({lines:result.log, cursor:0, drops:result.drops, won:result.won, expedition, isExpedition:true});
+    setReplay({lines:result.log, cursor:0, drops:result.drops as LegacyItem[], won:result.won, expedition, isExpedition:true} as LegacyReplay);
     setTab("battle");
     updateQuestProgress(fp, inventory);
   };
@@ -2391,32 +2443,34 @@ function App() {
     replayTimerRef.current=setTimeout(()=>{
       setReplay(r=>r?{...r,cursor:r.cursor+1}:null);
     },delay);
-    return()=>clearTimeout(replayTimerRef.current);
+    return()=>{ if(replayTimerRef.current) clearTimeout(replayTimerRef.current); };
   },[replay]);
 
   useEffect(()=>{
     if(!replay||replay.cursor<replay.lines.length) return;
     if(replay.drops&&replay.drops.length>0&&!lootDrop){
-      setLootDrop({...replay.drops[0], _remaining: replay.drops.slice(1)});
+      setLootDrop({...replay.drops[0], _remaining: replay.drops.slice(1)} as LootDrop);
     }
   },[(replay&&replay.cursor)]);
 
   const takeLoot=()=>{
     const remaining=(lootDrop&&lootDrop._remaining)||[];
+    if(!lootDrop) return;
     setInventory(inv=>[...inv,{...lootDrop,_remaining:undefined}]);
-    setLootDrop(remaining.length>0?{...remaining[0],_remaining:remaining.slice(1)}:null);
+    setLootDrop(remaining.length>0?({...remaining[0],_remaining:remaining.slice(1)} as LootDrop):null);
   };
   const discardLoot=()=>{
     const remaining=(lootDrop&&lootDrop._remaining)||[];
-    setLootDrop(remaining.length>0?{...remaining[0],_remaining:remaining.slice(1)}:null);
+    setLootDrop(remaining.length>0?({...remaining[0],_remaining:remaining.slice(1)} as LootDrop):null);
   };
   const equipLootNow=()=>{
+    if(!lootDrop) return;
     const item={...lootDrop,_remaining:undefined};
     const remaining=(lootDrop&&lootDrop._remaining)||[];
     const old=player.equipment[item.slot];
     setPlayer(p=>({...p,equipment:{...p.equipment,[item.slot]:item}}));
     if(old)setInventory(inv=>[...inv,{...old,uid:Date.now()}]);
-    setLootDrop(remaining.length>0?{...remaining[0],_remaining:remaining.slice(1)}:null);
+    setLootDrop(remaining.length>0?({...remaining[0],_remaining:remaining.slice(1)} as LootDrop):null);
   };
 
   const mercScrollsInInv = inventory.filter(i=>i.type==="merc_scroll");
@@ -2428,7 +2482,7 @@ function App() {
     if(!selectedScrolls.length){alert("請先從背包選擇傭兵契約捲軸！");return;}
     const usedUids=new Set(selectedScrolls);
     setInventory(inv=>inv.filter(i=>!usedUids.has(i.uid)));
-    const mercs=selectedScrollObjs.map(s=>({...s,curHp:s.hp,alive:true}));
+    const mercs=selectedScrollObjs.map((s:any)=>({...s,curHp:s.hp,alive:true}));
     const np={...player};
     const result=simulateMercRun(dungeonId,np,mercs);
     const fp=result.finalPlayer;
@@ -2436,7 +2490,7 @@ function App() {
     fp.highestLevel=Math.max(fp.highestLevel||1,fp.level);
     setPlayer(fp);
     setSelectedScrolls([]);
-    setReplay({lines:result.log,cursor:0,drops:result.drops,won:result.won,isMerc:true,mercDungeonId:dungeonId});
+    setReplay({lines:result.log,cursor:0,drops:result.drops as LegacyItem[],won:result.won,isMerc:true,mercDungeonId:dungeonId} as LegacyReplay);
     setTab("battle");
     updateQuestProgress(fp,inventory);
   };
@@ -2444,7 +2498,7 @@ function App() {
   const usePotion=()=>{
     const idx=inventory.findIndex(i=>i.type==="potion"); if(idx===-1)return;
     const p=inventory[idx]; const ni=[...inventory]; ni.splice(idx,1);
-    setPlayer(pl=>({...pl,hp:Math.min(pl.hp+p.heal,cMhp(pl))})); setInventory(ni);
+    setPlayer(pl=>({...pl,hp:Math.min(pl.hp + (p.heal || 0), cMhp(pl))})); setInventory(ni);
   };
 
   const buyItem=item=>{
@@ -2583,7 +2637,7 @@ function App() {
       setArenaLastDate(today);
       setArenaRefreshes(5);
     }
-    setArenaOpponents(Array.from({length:4}, ()=>genArenaOpponent(player.level)));
+    setArenaOpponents(Array.from({length:4}, ()=>genArenaOpponent(player.level)) as LegacyArenaOpponent[]);
   };
 
   // ── Quest handlers ────────────────────────────────────────────────────────
@@ -2624,7 +2678,7 @@ function App() {
 
     // Apply rewards
     let np = {...player};
-    const drops = [];
+    const drops: any[] = [];
     def.rewards.forEach(r => {
       if(r.type==="gold")   { np.gold += r.value; }
       if(r.type==="exp")    { const log=[]; np=lvUp(np, r.value, 0, log); }
@@ -2670,7 +2724,7 @@ function App() {
       if(player.gold < cost) { alert(`刷新需要 ${cost} 金幣！`); return; }
       setPlayer(p=>({...p, gold:p.gold-cost}));
     }
-    setArenaOpponents(Array.from({length:4}, ()=>genArenaOpponent(player.level)));
+    setArenaOpponents(Array.from({length:4}, ()=>genArenaOpponent(player.level)) as LegacyArenaOpponent[]);
   };
 
   const startArenaBattle = (opponent) => {
@@ -2690,7 +2744,7 @@ function App() {
     }
     np.highestLevel = Math.max(np.highestLevel||1, np.level);
     setPlayer(np);
-    setReplay({lines:result.log, cursor:0, drops:[], won:result.won, isArena:true, opponent});
+    setReplay({lines:result.log, cursor:0, drops:[], won:result.won, isArena:true, opponent} as LegacyReplay);
     setTab("battle");
     updateQuestProgress(np, inventory);
   };
@@ -3485,7 +3539,7 @@ function App() {
                             {item.affixes && item.affixes.length > 0 && <div className="iaf">
                               {item.affixes.map((a,i)=>(
                                 <div key={i} className={`al${a.special?" as":""}`}>
-                                  {a.stat?`${a.tag}:+${a.rolledVal}`:a.special==="all"?`${a.tag}:全屬+${Math.round(a.rolledVal*100)}%`:a.special==="first"?`${a.tag}:先攻×${1+a.rolledVal}`:""}
+                                  {a.stat?`${a.tag}:+${a.rolledVal || 0}`:a.special==="all"?`${a.tag}:全屬+${Math.round((a.rolledVal || 0)*100)}%`:a.special==="first"?`${a.tag}:先攻×${1+(a.rolledVal || 0)}`:""}
                                 </div>
                               ))}
                             </div>}
