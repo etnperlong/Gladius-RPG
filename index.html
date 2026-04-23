@@ -3153,6 +3153,8 @@ function App() {
     setQuestNotify(`🛏 休息完畢！HP 回滿，所有禁戰狀態已解除。\n費用：🪙${cost}`);
     setTimeout(()=>setQuestNotify(null), 3000);
   };
+
+  const initArena = () => {
     const today = new Date().toISOString().slice(0,10);
     // Reset free refreshes on new day
     if(arenaLastDate !== today) {
