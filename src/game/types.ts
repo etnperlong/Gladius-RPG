@@ -15,6 +15,61 @@ export type RuntimeItem = Record<string, any>;
 
 export type RuntimeEquipment = Record<EquipmentSlotId, RuntimeItem | null>;
 
+export type RuntimeLogEntry = {
+  txt: string;
+  type: string;
+};
+
+export type RuntimeQuestProgressEntry = {
+  collected: boolean;
+  baseVal: number;
+};
+
+export type RuntimeQuestState = {
+  progress: Record<string, RuntimeQuestProgressEntry>;
+  dailyDate: string;
+  weeklyDate: string;
+};
+
+export type RuntimeArenaOpponent = Record<string, any> & {
+  id: number;
+  name: string;
+  title: string;
+  level: number;
+  tier: string;
+  attack: number;
+  defense: number;
+  maxHp: number;
+  hp: number;
+  equipment: RuntimeEquipment;
+  goldCarried: number;
+  wcKey: string;
+  wins: number;
+  losses: number;
+};
+
+export type RuntimeArenaState = {
+  arenaOpponents: RuntimeArenaOpponent[];
+  arenaInjuredUntil: number;
+  arenaRefreshes: number;
+  arenaLastDate: string;
+};
+
+export type RuntimeReplay = Record<string, any> & {
+  lines: RuntimeLogEntry[];
+  cursor: number;
+  drops: RuntimeItem[];
+  won: boolean;
+  isArena?: boolean;
+  isExpedition?: boolean;
+  isMerc?: boolean;
+  dungeon?: RuntimeItem | null;
+  tier?: RuntimeItem | null;
+  expedition?: RuntimeItem | null;
+  mercDungeonId?: string;
+  opponent?: RuntimeArenaOpponent | null;
+};
+
 export type RuntimePlayer = Record<string, any> & {
   name: string;
   level: number;
