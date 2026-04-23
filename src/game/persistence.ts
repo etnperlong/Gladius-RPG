@@ -77,16 +77,26 @@ function parseInventory(storage: Storage | null): RuntimeItem[] {
   }
 }
 
-export function loadGame(storage?: Storage): GameSave {
-  const resolvedStorage = resolveStorage(storage);
-
+export function migrateGameState(save: {
+  player?: unknown;
+  inventory?: unknown;
+}): GameSave {
   return {
-    player: parsePlayer(resolvedStorage),
-    inventory: parseInventory(resolvedStorage),
+    player: mergePlayer(save.player),
+    inventory: Array.isArray(save.inventory) ? save.inventory : [],
   };
 }
 
-export function saveGame(save: GameSave, storage?: Storage): void {
+export function loadGameState(storage?: Storage): GameSave {
+  const resolvedStorage = resolveStorage(storage);
+
+  return migrateGameState({
+    player: parsePlayer(resolvedStorage),
+    inventory: parseInventory(resolvedStorage),
+  });
+}
+
+export function saveGameState(save: GameSave, storage?: Storage): void {
   const resolvedStorage = resolveStorage(storage);
 
   if (!resolvedStorage) {
@@ -97,7 +107,7 @@ export function saveGame(save: GameSave, storage?: Storage): void {
   resolvedStorage.setItem(STORAGE_KEYS.inventory, JSON.stringify(save.inventory));
 }
 
-export function clearGame(storage?: Storage): void {
+export function clearGameState(storage?: Storage): void {
   const resolvedStorage = resolveStorage(storage);
 
   if (!resolvedStorage) {

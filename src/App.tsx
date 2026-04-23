@@ -1,20 +1,24 @@
 import { useState } from "react";
 
 import { createInitialPlayer } from "./game/constants";
-import { clearGame, loadGame, saveGame } from "./game/persistence";
+import {
+  clearGameState,
+  loadGameState,
+  saveGameState,
+} from "./game/persistence";
 import type { GameSave } from "./game/types";
 
 export default function App() {
-  const [gameSave, setGameSave] = useState<GameSave>(() => loadGame());
+  const [gameSave, setGameSave] = useState<GameSave>(() => loadGameState());
   const [status, setStatus] = useState("");
 
   function handleSave() {
-    saveGame(gameSave);
+    saveGameState(gameSave);
     setStatus("存檔邊界已連線。");
   }
 
   function handleClear() {
-    clearGame();
+    clearGameState();
     setGameSave({ player: createInitialPlayer(), inventory: [] });
     setStatus("已清除 g_pl / g_inv。\n");
   }
