@@ -1,5 +1,5 @@
-import LegacyGame from "./legacy/game";
+import GameApp from "./game/GameApp";
 
 export default function App() {
-  return <LegacyGame />;
+  return <GameApp />;
 }
