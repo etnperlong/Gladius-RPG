@@ -104,6 +104,36 @@ export function useGameState() {
   const wCat = getWeaponCat(player);
   const renderedQuestState = checkQuestReset(questState, player);
   const questBadgeCount = Object.keys(QUEST_DEFS).filter((qid) => isQuestDone(qid, { ...player, _inv: inventory }, renderedQuestState)).length;
+  const equipmentSidebarItems = EQUIP_SLOTS.map((slot) => {
+    const equippedItem = player.equipment[slot.id];
+    const rarity = equippedItem ? getRarity(equippedItem.rarity) : null;
+    const rarityColor = rarity ? rarity.color : "#2a1808";
+    const glow = (rarity && rarity.glow) || "";
+    const category = equippedItem && equippedItem.cat ? WEAPON_CATEGORIES[equippedItem.cat] : null;
+
+    return {
+      category,
+      equippedItem,
+      onUnequip: () => unequip(slot.id),
+      rarityColor,
+      slot,
+      style: {
+        display: "flex",
+        alignItems: "flex-start" as const,
+        gap: 6,
+        padding: "5px 7px",
+        marginBottom: 4,
+        background: equippedItem ? `${rarityColor}0d` : "rgba(0,0,0,0.2)",
+        border: `1px solid ${equippedItem ? `${rarityColor}66` : "#1e1208"}`,
+        borderRadius: 3,
+        cursor: equippedItem ? "pointer" : "default",
+        boxShadow: equippedItem && glow ? glow : "none",
+        transition: "all .2s",
+      },
+      textShadow: glow ? `0 0 6px ${rarityColor}88` : "none",
+      title: equippedItem ? "點擊卸下" : `${slot.label}（空）`,
+    };
+  });
   const navTabs = [
     { id: "dungeon", label: "地下城", badgeCount: 0 },
     { id: "arena", label: "🏟 競技場", badgeCount: 0 },
@@ -435,6 +465,7 @@ export function useGameState() {
     setPlayer((p) => ({ ...p, gold: p.gold - cost }));
     setShopItems(Array.from({ length: 8 }, () => genShopItem(player.level)));
   };
+  const refreshShopCost = Math.floor(player.level * 5 + 20);
 
   const doEnhance = (uid: any) => {
     const fromInv = inventory.find((i) => i.uid === uid);
@@ -810,7 +841,7 @@ export function useGameState() {
       it,
       minNext,
       myBid,
-      onBidInputChange: (value: string) => updateBidInputValue(it.auctionId, value),
+      onBidInputChange: (event: { target: { value: string } }) => updateBidInputValue(it.auctionId, event.target.value),
       onClaim: () => claimAuction(it.auctionId),
       onSubmitBid: () => submitBid(it.auctionId, myBid),
       rar,
@@ -909,6 +940,7 @@ export function useGameState() {
     doTrain,
     addFreeMercScroll,
     dungeonSections,
+    equipmentSidebarItems,
     enhanceAnim,
     enhanceLog,
     enhanceTarget,
@@ -941,6 +973,7 @@ export function useGameState() {
     questBadgeCount,
     questNotify,
     questState,
+    refreshShopCost,
     renderedQuestState,
     refreshAuction,
     refreshShop,
