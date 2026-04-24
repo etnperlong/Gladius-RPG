@@ -8,7 +8,6 @@ import { ReplayLog } from "../components/ReplayLog";
 import { ArenaTab } from "../features/arena/ArenaTab";
 import { QuestTab } from "../features/quests/QuestTab";
 import { ENHANCE_LEVELS } from "../game/data/enhanceLevels";
-import { EQUIP_SLOTS } from "../game/data/equipmentSlots";
 import { WEAPON_CATEGORIES } from "../game/data/weaponCategories";
 import {
   getRarity,
@@ -39,6 +38,7 @@ function App() {
     discardLoot,
     addFreeMercScroll,
     dungeonSections,
+    equipmentSidebarItems,
     enhanceAnim,
     enhanceLog,
     equipItem,
@@ -64,6 +64,7 @@ function App() {
     player,
     potionShopItems,
     questNotify,
+    refreshShopCost,
     renderedQuestState,
     refreshAuction,
     refreshShop,
@@ -143,46 +144,32 @@ function App() {
             <div className="pn">
               <div className="ph">裝備（點擊卸下）</div>
               <div className="pb" style={{padding:"8px 10px"}}>
-                {EQUIP_SLOTS.map(s=>{
-                  const eq=player.equipment[s.id];
-                  const rar=eq?getRarity(eq.rarity):null;
-                  const rc=rar?rar.color:"#2a1808";
-                  const glow=(rar&&rar.glow)||"";
-                  const cat=(eq&&eq.cat)?WEAPON_CATEGORIES[eq.cat]:null;
+                {equipmentSidebarItems.map(({ category, equippedItem, onUnequip, rarityColor, slot, style, textShadow, title })=>{
                   return(
-                    <div key={s.id}
-                      onClick={()=>unequip(s.id)}
-                      title={eq?"點擊卸下":s.label+"（空）"}
-                      style={{
-                        display:"flex", alignItems:"flex-start", gap:6,
-                        padding:"5px 7px", marginBottom:4,
-                        background: eq ? `${rc}0d` : "rgba(0,0,0,0.2)",
-                        border: `1px solid ${eq ? rc+"66" : "#1e1208"}`,
-                        borderRadius:3,
-                        cursor: eq ? "pointer" : "default",
-                        boxShadow: eq && glow ? glow : "none",
-                        transition:"all .2s",
-                      }}>
-                      <span style={{fontSize:13,flexShrink:0,marginTop:1}}>{s.icon}</span>
+                    <div key={slot.id}
+                      onClick={onUnequip}
+                      title={title}
+                      style={style}>
+                      <span style={{fontSize:13,flexShrink:0,marginTop:1}}>{slot.icon}</span>
                       <div style={{minWidth:0,flex:1}}>
-                        <div style={{fontSize:9,color:"#4a3020",fontFamily:"'Cinzel',serif",letterSpacing:.5,lineHeight:1}}>{s.label}</div>
-                        {eq ? <>
+                        <div style={{fontSize:9,color:"#4a3020",fontFamily:"'Cinzel',serif",letterSpacing:.5,lineHeight:1}}>{slot.label}</div>
+                        {equippedItem ? <>
                           <div style={{
-                            fontSize:11, color:rc, lineHeight:1.3, marginTop:1,
-                            textShadow: glow ? `0 0 6px ${rc}88` : "none",
+                            fontSize:11, color:rarityColor, lineHeight:1.3, marginTop:1,
+                            textShadow,
                             fontFamily:"'Cinzel',serif", letterSpacing:.3,
-                          }}>{eq.name}</div>
+                          }}>{equippedItem.name}</div>
                           <div style={{fontSize:10,color:"#6a5030",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}}>
-                            {eq.attack>0 && <span style={{color:"#c8781e"}}>攻+{eq.attack}</span>}
-                            {eq.defense>0 && <span style={{color:"#4a9fd4"}}>防+{eq.defense}</span>}
-                            {eq.hp>0 && <span style={{color:"#c84040"}}>HP+{eq.hp}</span>}
-                            {eq.speed>0 && <span style={{color:"#4caf50"}}>速+{eq.speed}</span>}
-                            {cat && <span style={{color:"#d08030"}}>{cat.icon}{cat.label}</span>}
-                            {eq.itemLevel && <span style={{color:"#5a4020"}}>Lv{eq.itemLevel}</span>}
+                            {equippedItem.attack>0 && <span style={{color:"#c8781e"}}>攻+{equippedItem.attack}</span>}
+                            {equippedItem.defense>0 && <span style={{color:"#4a9fd4"}}>防+{equippedItem.defense}</span>}
+                            {equippedItem.hp>0 && <span style={{color:"#c84040"}}>HP+{equippedItem.hp}</span>}
+                            {equippedItem.speed>0 && <span style={{color:"#4caf50"}}>速+{equippedItem.speed}</span>}
+                            {category && <span style={{color:"#d08030"}}>{category.icon}{category.label}</span>}
+                            {equippedItem.itemLevel && <span style={{color:"#5a4020"}}>Lv{equippedItem.itemLevel}</span>}
                           </div>
-                          {eq.affixes && eq.affixes.length > 0 && (
+                          {equippedItem.affixes && equippedItem.affixes.length > 0 && (
                             <div style={{marginTop:2,display:"flex",gap:3,flexWrap:"wrap"}}>
-                              {eq.affixes.map((a: any,i: any)=>(
+                              {equippedItem.affixes.map((a: any,i: any)=>(
                                 <span key={i} style={{fontSize:9,color:a.special?"#c870d0":"#6aaa6a",background:"rgba(0,0,0,0.3)",padding:"0 3px",borderRadius:2}}>
                                   {a.tag}
                                 </span>
@@ -584,7 +571,7 @@ function App() {
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                         <div style={{fontSize:12,color:"#6a5030"}}>商品已依你的等級(Lv.{player.level})生成</div>
                         <button className="btn btm" style={{fontSize:10,padding:"5px 12px"}} onClick={refreshShop}>
-                          🔄 刷新 (-🪙{Math.floor(player.level*5+20)})
+                          🔄 刷新 (-🪙{refreshShopCost})
                         </button>
                       </div>
                       <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
@@ -685,7 +672,7 @@ function App() {
                                 <input
                                   type="number" min={minNext} placeholder={minNext}
                                   value={myBid}
-                                  onChange={e=>onBidInputChange(e.target.value)}
+                                  onChange={onBidInputChange}
                                   style={{width:90,background:"#0e0a05",border:"1px solid #4a3010",borderRadius:3,color:"#f0c040",padding:"5px 8px",fontSize:12,fontFamily:"'Cinzel',serif"}}
                                 />
                                 <button className="btn btp" style={{fontSize:10,padding:"6px 12px"}} onClick={onSubmitBid} disabled={!myBid||myBid<minNext||player.gold<myBid}>出價</button>
