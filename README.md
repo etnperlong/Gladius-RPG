@@ -1,6 +1,6 @@
 # ⚔ Gladius RPG
 
-A browser-based text RPG with turn-based combat, randomized loot, quests, arena battles, and inventory progression. The current migrated runtime now runs through Parcel + React + TypeScript while legacy standalone files remain in the repo as behavior references.
+A browser-based text RPG with turn-based combat, randomized loot, quests, arena battles, and inventory progression. The current runtime runs through Parcel + React + TypeScript from the modular `src/` app.
 
 ## 🎮 Run Locally
 
@@ -15,7 +15,7 @@ npm run dev
 npm run build
 ```
 
-Legacy note: `index.html` is no longer a standalone Babel runtime entry after the migration. The old standalone files remain in the repository as migration references until cleanup work is complete.
+Runtime note: `index.html` is the Parcel HTML entry for the modular app and loads `src/main.tsx`.
 
 ## ✨ Features
 
@@ -48,17 +48,17 @@ Legacy note: `index.html` is no longer a standalone Babel runtime entry after th
 ## 📁 Runtime Notes
 
 - `index.html` is the Parcel entry used by the migrated app.
-- Legacy standalone files such as `gladius.html`, `App.jsx`, and `gladiatus-clone.jsx` are still kept as references during the migration.
-- Historical backup variants remain in the repository and should not be treated as the active runtime.
+- The active runtime lives under `src/`.
+- Historical migration references may still appear inside docs, but they are not part of the current runnable architecture.
 
-## 📁 Reference Files
+## 📁 Runtime Files
 
 | File | Description |
 |------|-------------|
 | `index.html` | Parcel entry for the current migrated runtime |
-| `gladius.html` | Legacy standalone build kept for reference |
-| `gladius-guide.txt` | Beginner's guide (Traditional Chinese) |
-| `App.jsx` / `gladiatus-clone.jsx` | Legacy source snapshots used as migration references |
+| `src/main.tsx` | App bootstrap entry loaded by Parcel |
+| `src/App.tsx` | Root app shell |
+| `src/game/GameApp.tsx` | Main game composition |
 
 ## Disclaimer
 
