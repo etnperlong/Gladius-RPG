@@ -1,0 +1,636 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  INITIAL_EQUIPMENT,
+  INITIAL_PLAYER,
+} from "./constants";
+import { ENHANCE_LEVELS } from "./data/enhanceLevels";
+import { MERC_DUNGEONS } from "./data/mercenaries";
+import { QUEST_DEFS } from "./data/quests";
+import { TRAIN_STATS } from "./data/trainStats";
+import { applyEnhanceBonus, calcSellPrice, enhanceCost } from "./lib/items";
+import { trainCost } from "./lib/training";
+import { clearGameState, loadGameState, saveGameState } from "./persistence";
+import {
+  applyProgressionRewards,
+  cAtk,
+  cDef,
+  cMhp,
+  cSpd,
+  checkQuestReset,
+  genArenaOpponent,
+  genAuctionItem,
+  genLoot,
+  genMercScroll,
+  genShopItem,
+  gSpec,
+  getWeaponCat,
+  initQuestState,
+  isQuestDone,
+  simulateArenaBattle,
+  simulateExpedition,
+  simulateMercRun,
+  simulateRun,
+} from "./systems";
+import type {
+  AnyRecord,
+  LegacyArenaOpponent,
+  LegacyItem,
+  LegacyPlayer,
+  LegacyQuestState,
+  LegacyReplay,
+  LootDrop,
+} from "../legacy/types";
+
+export function useGameState() {
+  const [player, setPlayer] = useState<LegacyPlayer>(() => loadGameState().player as LegacyPlayer);
+
+  const [inventory, setInventory] = useState<LegacyItem[]>(() => loadGameState().inventory as LegacyItem[]);
+
+  const [tab, setTab] = useState("dungeon");
+  const [replay, setReplay] = useState<LegacyReplay | null>(null);
+  const replayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lootDrop, setLootDrop] = useState<LootDrop | null>(null);
+  const [selectedScrolls, setSelectedScrolls] = useState<any[]>([]);
+  const [saveMsg, setSaveMsg] = useState("");
+  const [shopFilter, setShopFilter] = useState("all");
+  const [invFilter, setInvFilter] = useState("all");
+  const [shopItems, setShopItems] = useState<any[]>(() =>
+    Array.from({ length: 8 }, (_, i) =>
+      genShopItem(1, ["weapon", "offhand", "armor", "helmet", "gloves", "boots", "ring", "amulet"][i]),
+    ),
+  );
+  const [auctionItems, setAuctionItems] = useState<any[]>(() => Array.from({ length: 4 }, () => genAuctionItem(1)));
+  const [shopTab, setShopTab] = useState("buy");
+  const [bidInput, setBidInput] = useState<AnyRecord>({});
+  const [enhanceTarget, setEnhanceTarget] = useState<any>(null);
+  const [enhanceLog, setEnhanceLog] = useState<string[]>([]);
+  const [enhanceAnim, setEnhanceAnim] = useState<string | null>(null);
+  const [arenaOpponents, setArenaOpponents] = useState<LegacyArenaOpponent[]>([]);
+  const [arenaInjuredUntil, setArenaInjuredUntil] = useState(0);
+  const [arenaRefreshes, setArenaRefreshes] = useState(5);
+  const [arenaLastDate, setArenaLastDate] = useState("");
+  const [questState, setQuestState] = useState<LegacyQuestState>(() => initQuestState());
+  const [questNotify, setQuestNotify] = useState<string | null>(null);
+
+  const save = useCallback(() => {
+    saveGameState({ player, inventory });
+    setSaveMsg("存檔成功！");
+    setTimeout(() => setSaveMsg(""), 2000);
+  }, [inventory, player]);
+
+  const reset = () => {
+    if (!confirm("確定重置？")) return;
+    clearGameState();
+    setPlayer({ ...INITIAL_PLAYER, equipment: { ...INITIAL_EQUIPMENT } });
+    setInventory([]);
+    setReplay(null);
+    setSelectedScrolls([]);
+  };
+
+  const tAtk = cAtk(player);
+  const tDef = cDef(player);
+  const tMhp = cMhp(player);
+  const tSpd = cSpd(player);
+  const pSpec = gSpec(player);
+  const wCat = getWeaponCat(player);
+
+  function lvUp(np: any, expG: any, goldG: any, log: any) {
+    const withGold = { ...np, gold: (np.gold || 0) + goldG };
+    const prevLevel = withGold.level;
+    const { player: next } = applyProgressionRewards(withGold, { exp: expG, gold: 0 });
+    for (let lv = prevLevel + 1; lv <= next.level; lv++) {
+      log.push({ txt: `🌟 等級提升！Lv.${lv}！`, type: "win" });
+    }
+    return next;
+  }
+
+  const updateQuestProgress = (updatedPlayer: any, updatedInventory: any) => {
+    const statsWithInv = { ...updatedPlayer, _inv: updatedInventory || inventory };
+    const newQs = checkQuestReset(questState, updatedPlayer);
+    Object.keys(QUEST_DEFS).forEach((id) => {
+      if (!(newQs.progress[id] && newQs.progress[id].collected)) {
+        if (isQuestDone(id, statsWithInv, newQs)) {
+          // Only notify once per quest
+        }
+      }
+    });
+    if (newQs !== questState) setQuestState(newQs);
+  };
+
+  const startBattle = (dungeon: any, tier: any) => {
+    const result = simulateRun(dungeon, tier, { ...player }, { lvUp, genLoot, genMercScroll });
+    const fp = result.finalPlayer;
+    const killCount = dungeon.waves.flatMap((w: any) => w.monsters).length + (dungeon.boss ? 1 : 0);
+    const bossKill = result.won ? 1 : 0;
+    fp.totalKills = (fp.totalKills || 0) + (result.won ? killCount : Math.floor(killCount * 0.5));
+    fp.totalBossKills = (fp.totalBossKills || 0) + bossKill;
+    fp.totalDungeons = (fp.totalDungeons || 0) + (result.won ? 1 : 0);
+    fp.totalGoldEarned = (fp.totalGoldEarned || 0) + Math.max(0, fp.gold - player.gold);
+    fp.highestLevel = Math.max(fp.highestLevel || 1, fp.level);
+    setPlayer(fp);
+    setReplay({
+      lines: result.log,
+      cursor: 0,
+      drops: result.drops as LegacyItem[],
+      dungeon,
+      tier,
+      won: result.won,
+      pending: false,
+      isExpedition: false,
+    } as LegacyReplay);
+    setTab("battle");
+    updateQuestProgress(fp, inventory);
+  };
+
+  const startExpedition = (expedition: any) => {
+    const result = simulateExpedition(expedition, { ...player }, { lvUp, genLoot, genMercScroll });
+    const fp = result.finalPlayer;
+    fp.totalKills = (fp.totalKills || 0) + (result.won ? 1 : 0);
+    fp.totalExpeditions = (fp.totalExpeditions || 0) + (result.won ? 1 : 0);
+    fp.totalGoldEarned = (fp.totalGoldEarned || 0) + Math.max(0, fp.gold - player.gold);
+    fp.highestLevel = Math.max(fp.highestLevel || 1, fp.level);
+    setPlayer(fp);
+    setReplay({
+      lines: result.log,
+      cursor: 0,
+      drops: result.drops as LegacyItem[],
+      won: result.won,
+      expedition,
+      isExpedition: true,
+    } as LegacyReplay);
+    setTab("battle");
+    updateQuestProgress(fp, inventory);
+  };
+
+  useEffect(() => {
+    if (!replay || replay.cursor >= replay.lines.length) return;
+    const delay = replay.lines[replay.cursor] && replay.lines[replay.cursor].type === "sep"
+      ? 60
+      : replay.lines[replay.cursor] && replay.lines[replay.cursor].type === "title"
+        ? 100
+        : 30;
+    replayTimerRef.current = setTimeout(() => {
+      setReplay((r) => (r ? { ...r, cursor: r.cursor + 1 } : null));
+    }, delay);
+    return () => {
+      if (replayTimerRef.current) clearTimeout(replayTimerRef.current);
+    };
+  }, [replay]);
+
+  useEffect(() => {
+    if (!replay || replay.cursor < replay.lines.length) return;
+    if (replay.drops && replay.drops.length > 0 && !lootDrop) {
+      setLootDrop({ ...replay.drops[0], _remaining: replay.drops.slice(1) } as LootDrop);
+    }
+  }, [replay && replay.cursor]);
+
+  const takeLoot = () => {
+    const remaining = (lootDrop && lootDrop._remaining) || [];
+    if (!lootDrop) return;
+    setInventory((inv) => [...inv, { ...lootDrop, _remaining: undefined }]);
+    setLootDrop(remaining.length > 0 ? ({ ...remaining[0], _remaining: remaining.slice(1) } as LootDrop) : null);
+  };
+
+  const discardLoot = () => {
+    const remaining = (lootDrop && lootDrop._remaining) || [];
+    setLootDrop(remaining.length > 0 ? ({ ...remaining[0], _remaining: remaining.slice(1) } as LootDrop) : null);
+  };
+
+  const equipLootNow = () => {
+    if (!lootDrop) return;
+    const item = { ...lootDrop, _remaining: undefined };
+    const remaining = (lootDrop && lootDrop._remaining) || [];
+    const old = player.equipment[item.slot];
+    setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [item.slot]: item } }));
+    if (old) setInventory((inv) => [...inv, { ...old, uid: Date.now() }]);
+    setLootDrop(remaining.length > 0 ? ({ ...remaining[0], _remaining: remaining.slice(1) } as LootDrop) : null);
+  };
+
+  const mercScrollsInInv = inventory.filter((i) => i.type === "merc_scroll");
+  const selectedScrollObjs = selectedScrolls.map((uid) => inventory.find((i) => i.uid === uid)).filter(Boolean);
+
+  const startMercBattle = (dungeonId: any) => {
+    const dungeon = MERC_DUNGEONS.find((d) => d.id === dungeonId) || MERC_DUNGEONS[0];
+    if (player.level < dungeon.minLv) {
+      alert(`需要 Lv.${dungeon.minLv}！`);
+      return;
+    }
+    if (!selectedScrolls.length) {
+      alert("請先從背包選擇傭兵契約捲軸！");
+      return;
+    }
+    const usedUids = new Set(selectedScrolls);
+    setInventory((inv) => inv.filter((i) => !usedUids.has(i.uid)));
+    const mercs = selectedScrollObjs.map((s: any) => ({ ...s, curHp: s.hp, alive: true }));
+    const np = { ...player };
+    const result = simulateMercRun(dungeonId, np, mercs, { lvUp, genLoot, genMercScroll, mercDungeons: MERC_DUNGEONS });
+    const fp = result.finalPlayer;
+    fp.totalMercRuns = (fp.totalMercRuns || 0) + (result.won ? 1 : 0);
+    fp.highestLevel = Math.max(fp.highestLevel || 1, fp.level);
+    setPlayer(fp);
+    setSelectedScrolls([]);
+    setReplay({
+      lines: result.log,
+      cursor: 0,
+      drops: result.drops as LegacyItem[],
+      won: result.won,
+      isMerc: true,
+      mercDungeonId: dungeonId,
+    } as LegacyReplay);
+    setTab("battle");
+    updateQuestProgress(fp, inventory);
+  };
+
+  const usePotion = () => {
+    const idx = inventory.findIndex((i) => i.type === "potion");
+    if (idx === -1) return;
+    const p = inventory[idx];
+    const ni = [...inventory];
+    ni.splice(idx, 1);
+    setPlayer((pl) => ({ ...pl, hp: Math.min(pl.hp + (p.heal || 0), cMhp(pl)) }));
+    setInventory(ni);
+  };
+
+  const buyItem = (item: any) => {
+    if (player.gold < item.cost) return;
+    setPlayer((p) => ({ ...p, gold: p.gold - item.cost }));
+    const { cost: _c, auctionId: _a, currentBid: _b, myBid: _m, bidCount: _bc, endsIn: _e, sold: _s, ...clean } = item;
+    setInventory((inv) => [...inv, { ...clean, uid: Date.now() + Math.random(), specials: clean.specials || [], affixes: clean.affixes || [] }]);
+  };
+
+  const sellItem = (uid: any) => {
+    const item = inventory.find((i) => i.uid === uid);
+    if (!item) return;
+    const price = calcSellPrice(item);
+    setPlayer((p) => ({ ...p, gold: p.gold + price }));
+    setInventory((inv) => inv.filter((i) => i.uid !== uid));
+  };
+
+  const sortInventory = () => {
+    const order = ["weapon", "offhand", "armor", "helmet", "gloves", "boots", "ring", "amulet", "merc_scroll", "potion"];
+    const rarOrder = ["mythic", "legendary", "rare", "magic", "normal"];
+    setInventory((inv) =>
+      [...inv].sort((a, b) => {
+        const si = order.indexOf(a.type || a.slot) - order.indexOf(b.type || b.slot);
+        if (si !== 0) return si;
+        return rarOrder.indexOf(a.rarity) - rarOrder.indexOf(b.rarity);
+      }),
+    );
+  };
+
+  const sellJunk = () => {
+    const equippedUids = new Set(Object.values(player.equipment).filter(Boolean).map((e) => e.uid));
+    const junk = inventory.filter((i) => i.rarity === "normal" && !equippedUids.has(i.uid) && i.type !== "potion");
+    const total = junk.reduce((s, i) => s + calcSellPrice(i), 0);
+    if (!junk.length) {
+      alert("沒有普通品質裝備可賣");
+      return;
+    }
+    setPlayer((p) => ({ ...p, gold: p.gold + total }));
+    setInventory((inv) => inv.filter((i) => !junk.find((j) => j.uid === i.uid)));
+    alert(`賣出 ${junk.length} 件普通裝備，獲得 ${total} 金幣`);
+  };
+
+  const refreshShop = () => {
+    const cost = Math.floor(player.level * 5 + 20);
+    if (player.gold < cost) {
+      alert(`刷新需要 ${cost} 金幣`);
+      return;
+    }
+    setPlayer((p) => ({ ...p, gold: p.gold - cost }));
+    setShopItems(Array.from({ length: 8 }, () => genShopItem(player.level)));
+  };
+
+  const doEnhance = (uid: any) => {
+    const fromInv = inventory.find((i) => i.uid === uid);
+    const equippedSlot = Object.entries(player.equipment).find(([, eq]) => eq && eq.uid === uid);
+    const item = fromInv || (equippedSlot && equippedSlot[1]);
+    const isEquippedItem = !fromInv && !!equippedSlot;
+
+    if (!item) return;
+    const curLv = item.enhLv || 0;
+    if (curLv >= 10) {
+      setEnhanceLog((l) => [`⚠️ 已達最高強化等級 +10`, ...l]);
+      return;
+    }
+    const lvData = ENHANCE_LEVELS[curLv];
+    const cost = enhanceCost(item);
+    if (player.gold < cost) {
+      setEnhanceLog((l) => [`💰 金幣不足（需要 ${cost}）`, ...l]);
+      return;
+    }
+
+    setPlayer((p) => ({ ...p, gold: p.gold - cost }));
+
+    const success = Math.random() < lvData.rate;
+    if (success) {
+      const newLv = curLv + 1;
+      const baseAttack = item.baseAttack || (item.attack || 0);
+      const baseDefense = item.baseDefense || (item.defense || 0);
+      const baseHp = item.baseHp || (item.hp || 0);
+      const baseSpeed = item.baseSpeed || (item.speed || 0);
+      const enhanced = {
+        ...item,
+        enhLv: newLv,
+        baseAttack,
+        baseDefense,
+        baseHp,
+        baseSpeed,
+        ...applyEnhanceBonus({ ...item, enhLv: newLv, baseAttack, baseDefense, baseHp, baseSpeed }),
+      };
+      if (isEquippedItem) {
+        const slot = equippedSlot[0];
+        setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [slot]: enhanced } }));
+      } else {
+        setInventory((inv) => inv.map((i) => (i.uid === uid ? enhanced : i)));
+        Object.entries(player.equipment).forEach(([slot, eq]) => {
+          if (eq && eq.uid === uid) setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [slot]: enhanced } }));
+        });
+      }
+      setEnhanceAnim("success");
+      setEnhanceLog((l) => [`✨ 強化成功！${item.name} → +${newLv}！費用 ${cost} 金幣`, ...l]);
+      setPlayer((p) => {
+        const np2 = { ...p, totalEnhances: (p.totalEnhances || 0) + 1 };
+        updateQuestProgress(np2, inventory);
+        return np2;
+      });
+    } else {
+      const newLv = curLv <= 3 ? curLv : curLv - 1;
+      const degraded = newLv === curLv
+        ? item
+        : applyEnhanceBonus({
+            ...item,
+            enhLv: newLv,
+            baseAttack: item.baseAttack || (item.attack || 0),
+            baseDefense: item.baseDefense || (item.defense || 0),
+            baseHp: item.baseHp || (item.hp || 0),
+            baseSpeed: item.baseSpeed || (item.speed || 0),
+          });
+      if (newLv !== curLv) {
+        if (isEquippedItem) {
+          const slot = equippedSlot[0];
+          setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [slot]: { ...degraded, enhLv: newLv } } }));
+        } else {
+          setInventory((inv) => inv.map((i) => (i.uid === uid ? { ...degraded, enhLv: newLv } : i)));
+          Object.entries(player.equipment).forEach(([slot, eq]) => {
+            if (eq && eq.uid === uid) setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [slot]: { ...degraded, enhLv: newLv } } }));
+          });
+        }
+      }
+      setEnhanceAnim("fail");
+      setEnhanceLog((l) => [
+        newLv < curLv
+          ? `💔 強化失敗！+${curLv} → +${newLv}（降級）費用 ${cost} 金幣`
+          : `💔 強化失敗！+${curLv} 維持不變。費用 ${cost} 金幣`,
+        ...l,
+      ]);
+    }
+    setTimeout(() => setEnhanceAnim(null), 700);
+  };
+
+  const doTrain = (statId: any) => {
+    const current = player[statId] || 0;
+    const cost = trainCost(player.level, current);
+    if (player.gold < cost) return;
+    if (player.gold - cost < 50) {
+      alert(`訓練費用 ${cost}，會讓金幣低於 50，請先賺更多金幣！`);
+      return;
+    }
+    const trainStat = TRAIN_STATS.find((s) => s.id === statId);
+    const isMhp = trainStat && trainStat.hpStat;
+    setPlayer((p) => {
+      const np = { ...p, gold: p.gold - cost, [statId]: (p[statId] || 0) + 1, totalTrains: (p.totalTrains || 0) + 1 };
+      if (isMhp) np.hp = Math.min(np.hp + 3, cMhp(np));
+      updateQuestProgress(np, inventory);
+      return np;
+    });
+  };
+
+  const initArena = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (arenaLastDate !== today) {
+      setArenaLastDate(today);
+      setArenaRefreshes(5);
+    }
+    setArenaOpponents(Array.from({ length: 4 }, () => genArenaOpponent(player.level)) as LegacyArenaOpponent[]);
+  };
+
+  const collectQuest = (questId: any) => {
+    const def = QUEST_DEFS[questId];
+    if (!def) return;
+    const statsWithInv = { ...player, _inv: inventory };
+    if (!isQuestDone(questId, statsWithInv, questState)) return;
+
+    let np = { ...player };
+    const drops: any[] = [];
+    def.rewards.forEach((r: any) => {
+      if (r.type === "gold") {
+        np.gold += r.value;
+      }
+      if (r.type === "exp") {
+        const log: any[] = [];
+        np = lvUp(np, r.value, 0, log);
+      }
+      if (r.type === "item") {
+        const d = genLoot(np.level, r.rarity === "mythic" ? 0.6 : r.rarity === "legendary" ? 0.4 : r.rarity === "rare" ? 0.2 : 0.1);
+        drops.push(d);
+      }
+      if (r.type === "scroll") {
+        const s = genMercScroll(np.level, r.rarity);
+        drops.push(s);
+      }
+    });
+    setPlayer(np);
+    if (drops.length > 0) setInventory((inv) => [...inv, ...drops]);
+
+    setQuestState((qs) => ({
+      ...qs,
+      progress: { ...qs.progress, [questId]: { ...(qs.progress[questId] || {}), collected: true } },
+    }));
+
+    const rewardText = def.rewards.map((r: any) => r.label).join("、");
+    setQuestNotify(`✅ 任務完成：${def.title}\n獎勵：${rewardText}`);
+    setTimeout(() => setQuestNotify(null), 3000);
+  };
+
+  const arenaRefresh = (free: any) => {
+    if (free) {
+      if (arenaRefreshes <= 0) return;
+      setArenaRefreshes((r) => r - 1);
+    } else {
+      const cost = 50 + player.level * 10;
+      if (player.gold < cost) {
+        alert(`刷新需要 ${cost} 金幣！`);
+        return;
+      }
+      setPlayer((p) => ({ ...p, gold: p.gold - cost }));
+    }
+    setArenaOpponents(Array.from({ length: 4 }, () => genArenaOpponent(player.level)) as LegacyArenaOpponent[]);
+  };
+
+  const startArenaBattle = (opponent: any) => {
+    const now = Date.now();
+    if (now < arenaInjuredUntil) return;
+    const result = simulateArenaBattle(player, opponent);
+    const np = { ...result.finalPlayer };
+    if (result.won) {
+      np.gold = np.gold + result.goldPlundered;
+      np.totalArenaWins = (np.totalArenaWins || 0) + 1;
+      np.totalGoldEarned = (np.totalGoldEarned || 0) + result.goldPlundered;
+      setArenaOpponents((ops) => ops.filter((o) => o.id !== opponent.id));
+    } else {
+      setArenaInjuredUntil(now + 30 * 60 * 1000);
+      np.hp = Math.floor(cMhp(np) * 0.2);
+      np.gold = Math.max(50, np.gold - Math.min(200, Math.floor(np.gold * 0.08)));
+    }
+    np.highestLevel = Math.max(np.highestLevel || 1, np.level);
+    setPlayer(np);
+    setReplay({ lines: result.log, cursor: 0, drops: [], won: result.won, isArena: true, opponent } as LegacyReplay);
+    setTab("battle");
+    updateQuestProgress(np, inventory);
+  };
+
+  const refreshAuction = () => {
+    setAuctionItems(Array.from({ length: 4 }, () => genAuctionItem(player.level)));
+  };
+
+  const placeBid = (auctionId: any, amount: any) => {
+    if (!amount || amount <= 0) return;
+    setAuctionItems((items) =>
+      items.map((it) => {
+        if (it.auctionId !== auctionId) return it;
+        const minBid = it.currentBid + Math.max(5, Math.floor(it.currentBid * 0.1));
+        if (amount < minBid) {
+          alert(`最低加價為 ${minBid} 金幣`);
+          return it;
+        }
+        if (player.gold < amount) {
+          alert("金幣不足！");
+          return it;
+        }
+        setPlayer((p) => ({ ...p, gold: p.gold - amount + (it.myBid || 0) }));
+        return { ...it, currentBid: amount, myBid: amount, bidCount: it.bidCount + 1 };
+      }),
+    );
+  };
+
+  const claimAuction = (auctionId: any) => {
+    const it = auctionItems.find((a) => a.auctionId === auctionId);
+    if (!it || !it.myBid) return;
+    const { cost: _c, auctionId: _a, currentBid: _b, myBid: _m, bidCount: _bc, endsIn: _e, sold: _s, ...clean } = it;
+    setInventory((inv) => [...inv, { ...clean, uid: Date.now() + Math.random() }]);
+    setAuctionItems((items) => items.filter((a) => a.auctionId !== auctionId));
+    refreshAuction();
+  };
+
+  const equipItem = (item: any) => {
+    const old = player.equipment[item.slot];
+    setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [item.slot]: item } }));
+    setInventory((inv) => {
+      const n = inv.filter((i) => i.uid !== item.uid);
+      if (old) n.push({ ...old, uid: Date.now() });
+      return n;
+    });
+  };
+
+  const unequip = (slot: any) => {
+    const item = player.equipment[slot];
+    if (!item) return;
+    setInventory((inv) => [...inv, { ...item, uid: Date.now() }]);
+    setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [slot]: null } }));
+  };
+
+  const SLOT_FILTERS = [
+    { id: "all", label: "全部" },
+    { id: "weapon", label: "武器" },
+    { id: "offhand", label: "副手" },
+    { id: "armor", label: "胸甲" },
+    { id: "helmet", label: "頭盔" },
+    { id: "gloves", label: "手套" },
+    { id: "boots", label: "靴子" },
+    { id: "ring", label: "戒指" },
+    { id: "amulet", label: "護符" },
+    { id: "potion", label: "藥水" },
+    { id: "merc_scroll", label: "📜傭兵" },
+  ];
+
+  const filteredShop = shopFilter === "all" ? shopItems : shopItems.filter((i) => i.slot === shopFilter || i.type === shopFilter);
+  const filteredInv = invFilter === "all" ? inventory : inventory.filter((i) => i.slot === invFilter || i.type === invFilter);
+  const potions = inventory.filter((i) => i.type === "potion").length;
+  const expPct = Math.round((player.exp / player.expNeeded) * 100);
+
+  return {
+    arenaInjuredUntil,
+    arenaOpponents,
+    arenaRefresh,
+    arenaRefreshes,
+    auctionItems,
+    bidInput,
+    buyItem,
+    claimAuction,
+    collectQuest,
+    discardLoot,
+    doEnhance,
+    doTrain,
+    enhanceAnim,
+    enhanceLog,
+    enhanceTarget,
+    equipItem,
+    equipLootNow,
+    expPct,
+    filteredInv,
+    filteredShop,
+    initArena,
+    invFilter,
+    inventory,
+    lootDrop,
+    mercScrollsInInv,
+    pSpec,
+    placeBid,
+    player,
+    potions,
+    questNotify,
+    questState,
+    refreshAuction,
+    refreshShop,
+    replay,
+    reset,
+    save,
+    saveMsg,
+    selectedScrollObjs,
+    selectedScrolls,
+    sellItem,
+    sellJunk,
+    setBidInput,
+    setEnhanceTarget,
+    setInventory,
+    setInvFilter,
+    setLootDrop,
+    setPlayer,
+    setReplay,
+    setSelectedScrolls,
+    setShopFilter,
+    setShopTab,
+    setTab,
+    shopFilter,
+    shopItems,
+    shopTab,
+    SLOT_FILTERS,
+    sortInventory,
+    startArenaBattle,
+    startBattle,
+    startExpedition,
+    startMercBattle,
+    tAtk,
+    tDef,
+    tMhp,
+    tSpd,
+    tab,
+    takeLoot,
+    unequip,
+    updateQuestProgress,
+    usePotion,
+    wCat,
+  };
+}
