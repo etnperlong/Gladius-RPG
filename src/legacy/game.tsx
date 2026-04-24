@@ -1578,28 +1578,19 @@ function App() {
                         );
                       }
                       // Regular equipment
-                      const rar=getRarity(item.rarity);
                       const price=calcSellPrice(item);
                       return(
-                        <div key={item.uid} className="ii" style={{borderColor:rar.color+(rar.id==="normal"?"33":"77"),background:rar.id==="normal"?"linear-gradient(160deg,#1a1208,#120e06)":`linear-gradient(160deg,${rar.color}0a,#120e06)`,boxShadow:rar.glow||"none"}}>
-                          <div className="iii" style={{filter:`drop-shadow(0 2px 4px ${rar.color}66)`}}>{item.icon}</div>
-                          {rar.id!=="normal"&&<div className="rb" style={{color:rar.color,borderColor:rar.color+"55",background:`${rar.color}15`}}>{rar.label}</div>}
-                          <div className="iin" style={{color:rar.color}}>{item.name}</div>
-                          {item.itemLevel>0&&<div style={{fontSize:9,color:"#5a4020",marginBottom:2}}>Lv.{item.itemLevel}</div>}
-                          <div className="iis">
-                            {item.attack>0&&<div style={{color:item.attack>50?"#f5c040":item.attack>25?"#c8781e":"#5a4020"}}>攻+{item.attack}</div>}
-                            {item.defense>0&&<div style={{color:item.defense>40?"#80c0f0":item.defense>20?"#4a9fd4":"#5a4020"}}>防+{item.defense}</div>}
-                            {item.hp>0&&<div style={{color:item.hp>80?"#f06060":item.hp>40?"#c84040":"#5a4020"}}>HP+{item.hp}</div>}
-                            {item.speed>0&&<div style={{color:"#5a9050"}}>速+{item.speed}</div>}
-                          </div>
-                          {item.cat&&<div style={{fontSize:10,color:"#d08030",marginBottom:3}}>{item.cat&&WEAPON_CATEGORIES[item.cat]?WEAPON_CATEGORIES[item.cat].icon:""}{item.cat&&WEAPON_CATEGORIES[item.cat]?WEAPON_CATEGORIES[item.cat].label:""} · {item.cat&&WEAPON_CATEGORIES[item.cat]?WEAPON_CATEGORIES[item.cat].traitDesc:""}</div>}
-                          <AffixLines affixes={item.affixes}/>
-                          <div style={{color:"#f0c040",fontSize:11,margin:"5px 0"}}>售 🪙{price}</div>
-                          <div style={{display:"flex",gap:4}}>
-                            <button className="btn btp" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>equipItem(item)}>裝備</button>
-                            <button className="btn btd" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>sellItem(item.uid)}>出售</button>
-                          </div>
-                        </div>
+                        <ItemCard
+                          key={item.uid}
+                          item={item}
+                          onEquip={()=>equipItem(item)}
+                          footer={(
+                            <>
+                              <div style={{color:"#f0c040",fontSize:11,margin:"1px 0 0"}}>售 🪙{price}</div>
+                              <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
+                            </>
+                          )}
+                        />
                       );
                     })}
                   </div>
