@@ -7,7 +7,6 @@ import {
   INITIAL_PLAYER,
 } from "../game/constants";
 import { AffixLines } from "../components/AffixLines";
-import { BattleLog } from "../components/BattleLog";
 import { HpBar } from "../components/HpBar";
 import { ReplayLog } from "../components/ReplayLog";
 import { DUNGEON_TIERS } from "../game/data/dungeonTiers";
@@ -856,7 +855,6 @@ function App() {
   const filteredShop = shopFilter==="all"?shopItems:shopItems.filter(i=>i.slot===shopFilter||i.type===shopFilter);
   const filteredInv  = invFilter==="all"?inventory:inventory.filter(i=>i.slot===invFilter||i.type===invFilter);
   const potions=inventory.filter(i=>i.type==="potion").length;
-  const hpPct=Math.round((player.hp/tMhp)*100);
   const expPct=Math.round((player.exp/player.expNeeded)*100);
 
   return (
@@ -1339,11 +1337,7 @@ function App() {
                         </div>
                       </div>
 
-                      {replay.cursor < replay.lines.length ? (
-                        <ReplayLog lines={replay.lines} cursor={replay.cursor}/>
-                      ) : (
-                        <BattleLog log={replay.lines}/>
-                      )}
+                      <ReplayLog lines={replay.lines} cursor={replay.cursor}/>
 
                       <div className="bact" style={{marginTop:12}}>
                         {replay.cursor<replay.lines.length?(
