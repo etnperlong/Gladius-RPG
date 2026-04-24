@@ -14,11 +14,8 @@ import { EQUIP_SLOTS } from "../game/data/equipmentSlots";
 import { EXPEDITIONS } from "../game/data/expeditions";
 import { MERC_DUNGEONS } from "../game/data/mercenaries";
 import { MONSTERS } from "../game/data/monsters";
-import { TRAIN_STATS } from "../game/data/trainStats";
 import { WEAPON_CATEGORIES } from "../game/data/weaponCategories";
-import { TRAIN_STAT_DISPLAY_KEYS } from "../game/lib/display";
-import { calcSellPrice, enhanceCost } from "../game/lib/items";
-import { trainCost } from "../game/lib/training";
+import { calcSellPrice } from "../game/lib/items";
 import {
   getRarity,
 } from "../game/systems";
@@ -43,18 +40,13 @@ function App() {
     arenaOpponents,
     arenaRefresh,
     arenaRefreshes,
-    auctionItems,
-    bidInput,
+    auctionDisplayItems,
     buyItem,
-    claimAuction,
     collectQuest,
     discardLoot,
-    doEnhance,
-    doTrain,
     addFreeMercScroll,
     enhanceAnim,
     enhanceLog,
-    enhanceTarget,
     equipItem,
     equipLootNow,
     expPct,
@@ -67,9 +59,10 @@ function App() {
     inventory,
     lootDrop,
     mercScrollsInInv,
+    navTabs,
     openBattleReport,
     player,
-    questBadgeCount,
+    potionShopItems,
     questNotify,
     renderedQuestState,
     refreshAuction,
@@ -83,7 +76,6 @@ function App() {
     selectMercScrollFromInventory,
     sellItem,
     sellJunk,
-    setEnhanceTarget,
     setInvFilter,
     setShopFilter,
     setShopTab,
@@ -98,16 +90,16 @@ function App() {
     startMercBattle,
     tAtk,
     tDef,
+    trainingCards,
     tMhp,
     tSpd,
     tab,
     takeLoot,
     toggleSelectedScroll,
     unequip,
-    updateBidInputValue,
     useInventoryPotion,
-    submitBid,
     wCat,
+    enhanceItems,
   } = state;
 
   return (
@@ -227,17 +219,16 @@ function App() {
           {/* ── Main ── */}
           <main>
             <div className="nt">
-              {[["dungeon","地下城"],["arena","🏟 競技場"],["quest","📋 任務"],["shop","商店"],["inventory","背包"],["train","⚒ 鍛造"]].map(([id,lbl])=>{
-                const isQuest = id==="quest";
+              {navTabs.map(({ id, label, badgeCount })=>{
                 return(
                   <button key={id} className={`nb${tab===id?" active":""}`}
                     style={{position:"relative"}}
                     onClick={()=>handleTabSelect(id)}>
-                    {lbl}
-                    {isQuest&&questBadgeCount>0&&(
+                    {label}
+                    {badgeCount>0&&(
                       <span style={{position:"absolute",top:4,right:4,background:"#c84040",color:"#fff",
                         borderRadius:"8px",padding:"0 4px",fontSize:9,lineHeight:"14px",fontFamily:"sans-serif"}}>
-                        {questBadgeCount}
+                        {badgeCount}
                       </span>
                     )}
                   </button>
@@ -404,40 +395,35 @@ function App() {
                     <span style={{color:"#c8961e"}}>保護機制：訓練不會讓金幣低於 50。</span>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
-                    {TRAIN_STATS.map(stat=>{
-                      const current=player[stat.id]||0;
-                      const displayKey=TRAIN_STAT_DISPLAY_KEYS[stat.id];
-                      const cost=trainCost(player.level,current);
-                      const canAfford=player.gold-cost>=50;
-                      const effect=stat.hpStat?`每次+3最大HP（已訓${current}次，+${current*3}HP）`:`每次+1${stat.label}（已訓${current}次）`;
+                    {trainingCards.map(card=>{
                       return(
-                        <div key={stat.id} style={{
-                          background:`linear-gradient(160deg,${stat.color}0a,#141008)`,
-                          border:`1px solid ${stat.color}44`,
+                        <div key={card.id} style={{
+                          background:`linear-gradient(160deg,${card.color}0a,#141008)`,
+                          border:`1px solid ${card.color}44`,
                           borderRadius:6,padding:"14px",
                         }}>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                            <span style={{fontSize:22}}>{stat.icon}</span>
+                            <span style={{fontSize:22}}>{card.icon}</span>
                             <div>
-                              <div style={{fontFamily:"'Cinzel',serif",fontSize:13,color:stat.color}}>{stat.label}</div>
-                              <div style={{fontSize:11,color:"#5a4020"}}>{stat.desc}</div>
+                              <div style={{fontFamily:"'Cinzel',serif",fontSize:13,color:card.color}}>{card.label}</div>
+                              <div style={{fontSize:11,color:"#5a4020"}}>{card.desc}</div>
                             </div>
                           </div>
-                          <div style={{fontSize:12,color:"#7a6040",marginBottom:4}}>{effect}</div>
+                          <div style={{fontSize:12,color:"#7a6040",marginBottom:4}}>{card.effect}</div>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                            <div style={{fontFamily:"'Cinzel',serif",fontSize:14,color:stat.color}}>
-                              {stat.hpStat?`${player.maxHp+(current*3)}`:`${(player[displayKey]||0)+(current||0)}`}
-                              <span style={{fontSize:10,color:"#5a4020",marginLeft:4}}>（基礎+{current}訓練）</span>
+                            <div style={{fontFamily:"'Cinzel',serif",fontSize:14,color:card.color}}>
+                              {card.displayValue}
+                              <span style={{fontSize:10,color:"#5a4020",marginLeft:4}}>（基礎+{card.current}訓練）</span>
                             </div>
-                            <div style={{fontSize:12,color:canAfford?"#f0c040":"#c84040"}}>🪙{cost}</div>
+                            <div style={{fontSize:12,color:card.canAfford?"#f0c040":"#c84040"}}>🪙{card.cost}</div>
                           </div>
                           <div style={{height:4,background:"#1a1208",borderRadius:2,marginBottom:8,overflow:"hidden"}}>
-                            <div style={{height:"100%",width:`${Math.min(100,current*2)}%`,background:stat.color,borderRadius:2,transition:"width .4s"}}/>
+                            <div style={{height:"100%",width:card.progressWidth,background:card.color,borderRadius:2,transition:"width .4s"}}/>
                           </div>
                           <button className="btn btp" style={{width:"100%",fontSize:11}}
-                            onClick={()=>doTrain(stat.id)}
-                            disabled={!canAfford}>
-                            {canAfford?`訓練 (-🪙${cost})`:`金幣不足（需 ${cost}，保留50）`}
+                            onClick={card.onTrain}
+                            disabled={!card.canAfford}>
+                            {card.trainLabel}
                           </button>
                         </div>
                       );
@@ -476,22 +462,10 @@ function App() {
 
                   <div style={{fontSize:11,color:"#6a5030",marginBottom:8,fontFamily:"'Cinzel',serif",letterSpacing:1}}>選擇要強化的裝備：</div>
                   <div className="ig">
-                    {[
-                      ...Object.values(player.equipment).filter(Boolean),
-                      ...inventory.filter(i=>i.slot&&i.slot!=="merc_scroll"&&i.type!=="potion"),
-                    ].map(item=>{
-                      const rar=getRarity(item.rarity);
-                      const curLv=item.enhLv||0;
-                      const isMax=curLv>=10;
-                      const lvData=ENHANCE_LEVELS[curLv];
-                      const cost=enhanceCost(item);
-                      const canAfford=player.gold>=cost&&!isMax;
-                      const isSelected=enhanceTarget===item.uid;
-                      const isEquipped=Object.values(player.equipment).some(e=>(e&&e.uid)===item.uid);
-                      const enhColor=curLv>=7?"#e07020":curLv>=4?"#9c50d4":curLv>=1?"#4caf50":"#5a4020";
+                    {enhanceItems.map(({ canAfford, cost, curLv, enhColor, isEquipped, isMax, isSelected, item, lvData, rar, select, triggerEnhance })=>{
                       return(
                         <div key={item.uid} className="ii"
-                          onClick={()=>setEnhanceTarget(isSelected?null:item.uid)}
+                          onClick={select}
                           style={{
                             borderColor:isSelected?"#c8961e":rar.color+(curLv>0?"88":"33"),
                             background:isSelected?"linear-gradient(160deg,#2a1e08,#1a1208)":`linear-gradient(160deg,${rar.color}08,#120e06)`,
@@ -526,7 +500,7 @@ function App() {
                                            enhanceAnim==="fail"?"linear-gradient(135deg,#6a1a1a,#4a0e0e)":""
                               }}
                               disabled={!canAfford}
-                              onClick={e=>{e.stopPropagation();doEnhance(item.uid);}}>
+                              onClick={triggerEnhance}>
                               {canAfford?`⚒ 強化 +${curLv}→+${curLv+1}`:`金幣不足 (需${cost})`}
                             </button>
                           )}
@@ -655,14 +629,14 @@ function App() {
                         })}
                       </div>
                       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-                        {[{name:"小型回復藥",icon:"🧪",heal:30,cost:25},{name:"大型回復藥",icon:"⚗️",heal:80,cost:60}].map((p,i)=>(
-                          <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",background:"#1a1208",border:"1px solid #3a2a10",borderRadius:4,fontSize:12}}>
+                        {potionShopItems.map((p)=>(
+                          <div key={p.name} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",background:"#1a1208",border:"1px solid #3a2a10",borderRadius:4,fontSize:12}}>
                             <span>{p.icon}</span>
                             <span style={{color:"#c8a848"}}>{p.name}</span>
                             <span style={{color:"#50a860"}}>+{p.heal}HP</span>
                             <span style={{color:"#f0c040"}}>🪙{p.cost}</span>
-                            <button className="btn btp" style={{fontSize:10,padding:"4px 10px"}} disabled={player.gold<p.cost}
-                              onClick={()=>buyItem({...p,type:"potion",uid:Date.now()+Math.random(),specials:[],affixes:[]})}>買</button>
+                            <button className="btn btp" style={{fontSize:10,padding:"4px 10px"}} disabled={!p.canAfford}
+                              onClick={p.onBuy}>買</button>
                           </div>
                         ))}
                       </div>
@@ -705,12 +679,7 @@ function App() {
                         <button className="btn btm" style={{fontSize:10,padding:"5px 12px"}} onClick={refreshAuction}>🔄 刷新競標</button>
                       </div>
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        {auctionItems.filter(a=>!a.sold).map(it=>{
-                          const rar=getRarity(it.rarity);
-                          const cat=it.cat?WEAPON_CATEGORIES[it.cat]:null;
-                          const myBid=bidInput[it.auctionId]||"";
-                          const minNext=it.currentBid+Math.max(5,Math.floor(it.currentBid*0.1));
-                          const iWon=it.myBid>0&&it.myBid===it.currentBid;
+                        {auctionDisplayItems.map(({ cat, iWon, it, minNext, myBid, onBidInputChange, onClaim, onSubmitBid, rar })=>{
                           return(
                             <div key={it.auctionId} style={{
                               background:`linear-gradient(160deg,${rar.color}08,#141008)`,
@@ -749,11 +718,11 @@ function App() {
                                 <input
                                   type="number" min={minNext} placeholder={minNext}
                                   value={myBid}
-                                  onChange={e=>updateBidInputValue(it.auctionId, e.target.value)}
+                                  onChange={e=>onBidInputChange(e.target.value)}
                                   style={{width:90,background:"#0e0a05",border:"1px solid #4a3010",borderRadius:3,color:"#f0c040",padding:"5px 8px",fontSize:12,fontFamily:"'Cinzel',serif"}}
                                 />
-                                <button className="btn btp" style={{fontSize:10,padding:"6px 12px"}} onClick={()=>submitBid(it.auctionId,myBid)} disabled={!myBid||myBid<minNext||player.gold<myBid}>出價</button>
-                                {iWon&&<button className="btn btm" style={{fontSize:10,padding:"6px 12px"}} onClick={()=>claimAuction(it.auctionId)}>🎁 領取</button>}
+                                <button className="btn btp" style={{fontSize:10,padding:"6px 12px"}} onClick={onSubmitBid} disabled={!myBid||myBid<minNext||player.gold<myBid}>出價</button>
+                                {iWon&&<button className="btn btm" style={{fontSize:10,padding:"6px 12px"}} onClick={onClaim}>🎁 領取</button>}
                               </div>
                             </div>
                           );

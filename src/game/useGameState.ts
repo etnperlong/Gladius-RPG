@@ -8,6 +8,8 @@ import { ENHANCE_LEVELS } from "./data/enhanceLevels";
 import { MERC_DUNGEONS } from "./data/mercenaries";
 import { QUEST_DEFS } from "./data/quests";
 import { TRAIN_STATS } from "./data/trainStats";
+import { WEAPON_CATEGORIES } from "./data/weaponCategories";
+import { TRAIN_STAT_DISPLAY_KEYS } from "./lib/display";
 import { applyEnhanceBonus, calcSellPrice, enhanceCost } from "./lib/items";
 import { trainCost } from "./lib/training";
 import { clearGameState, loadGameState, saveGameState } from "./persistence";
@@ -24,6 +26,7 @@ import {
   genMercScroll,
   genShopItem,
   gSpec,
+  getRarity,
   getWeaponCat,
   initQuestState,
   isQuestDone,
@@ -96,6 +99,14 @@ export function useGameState() {
   const wCat = getWeaponCat(player);
   const renderedQuestState = checkQuestReset(questState, player);
   const questBadgeCount = Object.keys(QUEST_DEFS).filter((qid) => isQuestDone(qid, { ...player, _inv: inventory }, renderedQuestState)).length;
+  const navTabs = [
+    { id: "dungeon", label: "地下城", badgeCount: 0 },
+    { id: "arena", label: "🏟 競技場", badgeCount: 0 },
+    { id: "quest", label: "📋 任務", badgeCount: questBadgeCount },
+    { id: "shop", label: "商店", badgeCount: 0 },
+    { id: "inventory", label: "背包", badgeCount: 0 },
+    { id: "train", label: "⚒ 鍛造", badgeCount: 0 },
+  ];
 
   function lvUp(np: any, expG: any, goldG: any, log: any) {
     const withGold = { ...np, gold: (np.gold || 0) + goldG };
@@ -285,6 +296,10 @@ export function useGameState() {
     setPlayer((p) => ({ ...p, gold: p.gold - item.cost }));
     const { cost: _c, auctionId: _a, currentBid: _b, myBid: _m, bidCount: _bc, endsIn: _e, sold: _s, ...clean } = item;
     setInventory((inv) => [...inv, { ...clean, uid: Date.now() + Math.random(), specials: clean.specials || [], affixes: clean.affixes || [] }]);
+  };
+
+  const handleBuyPotion = (item: any) => {
+    buyItem({ ...item, type: "potion", uid: Date.now() + Math.random(), specials: [], affixes: [] });
   };
 
   const sellItem = (uid: any) => {
@@ -608,6 +623,92 @@ export function useGameState() {
     setTab("battle");
   };
 
+  const trainingCards = TRAIN_STATS.map((stat) => {
+    const current = player[stat.id] || 0;
+    const displayKey = TRAIN_STAT_DISPLAY_KEYS[stat.id];
+    const cost = trainCost(player.level, current);
+    const canAfford = player.gold - cost >= 50;
+    const effect = stat.hpStat ? `每次+3最大HP（已訓${current}次，+${current * 3}HP）` : `每次+1${stat.label}（已訓${current}次）`;
+
+    return {
+      canAfford,
+      cost,
+      current,
+      desc: stat.desc,
+      displayValue: stat.hpStat ? `${player.maxHp + current * 3}` : `${(player[displayKey] || 0) + (current || 0)}`,
+      effect,
+      icon: stat.icon,
+      id: stat.id,
+      label: stat.label,
+      progressWidth: `${Math.min(100, current * 2)}%`,
+      trainLabel: canAfford ? `訓練 (-🪙${cost})` : `金幣不足（需 ${cost}，保留50）`,
+      color: stat.color,
+      onTrain: () => doTrain(stat.id),
+    };
+  });
+
+  const enhanceItems = [
+    ...Object.values(player.equipment).filter(Boolean),
+    ...inventory.filter((i) => i.slot && i.slot !== "merc_scroll" && i.type !== "potion"),
+  ].map((item) => {
+    const rar = getRarity(item.rarity);
+    const curLv = item.enhLv || 0;
+    const isMax = curLv >= 10;
+    const lvData = ENHANCE_LEVELS[curLv];
+    const cost = enhanceCost(item);
+    const canAfford = player.gold >= cost && !isMax;
+    const isSelected = enhanceTarget === item.uid;
+    const isEquipped = Object.values(player.equipment).some((e) => (e && e.uid) === item.uid);
+    const enhColor = curLv >= 7 ? "#e07020" : curLv >= 4 ? "#9c50d4" : curLv >= 1 ? "#4caf50" : "#5a4020";
+
+    return {
+      canAfford,
+      cost,
+      curLv,
+      enhColor,
+      isEquipped,
+      isMax,
+      isSelected,
+      item,
+      lvData,
+      rar,
+      select: () => setEnhanceTarget(isSelected ? null : item.uid),
+      triggerEnhance: (event: { stopPropagation: () => void }) => {
+        event.stopPropagation();
+        doEnhance(item.uid);
+      },
+    };
+  });
+
+  const potionShopItems = [
+    { name: "小型回復藥", icon: "🧪", heal: 30, cost: 25 },
+    { name: "大型回復藥", icon: "⚗️", heal: 80, cost: 60 },
+  ].map((item) => ({
+    ...item,
+    canAfford: player.gold >= item.cost,
+    onBuy: () => handleBuyPotion(item),
+  }));
+
+  const auctionDisplayItems = auctionItems.filter((a) => !a.sold).map((it) => {
+    const rar = getRarity(it.rarity);
+    const cat = it.cat ? WEAPON_CATEGORIES[it.cat] : null;
+    const myBid = bidInput[it.auctionId] || "";
+    const minNext = it.currentBid + Math.max(5, Math.floor(it.currentBid * 0.1));
+    const iWon = it.myBid > 0 && it.myBid === it.currentBid;
+
+    return {
+      cat,
+      iWon,
+      it,
+      minNext,
+      myBid,
+      onBidInputChange: (value: string) => updateBidInputValue(it.auctionId, value),
+      onClaim: () => claimAuction(it.auctionId),
+      onSubmitBid: () => submitBid(it.auctionId, myBid),
+      rar,
+    };
+  });
+
   const SLOT_FILTERS = [
     { id: "all", label: "全部" },
     { id: "weapon", label: "武器" },
@@ -633,6 +734,7 @@ export function useGameState() {
     arenaRefresh,
     arenaRefreshes,
     auctionItems,
+    auctionDisplayItems,
     bidInput,
     buyItem,
     claimAuction,
@@ -651,15 +753,18 @@ export function useGameState() {
     filteredShop,
     closeReplay,
     handleTabSelect,
+    handleBuyPotion,
     initArena,
     invFilter,
     inventory,
     lootDrop,
     mercScrollsInInv,
+    navTabs,
     openBattleReport,
     pSpec,
     placeBid,
     player,
+    potionShopItems,
     potions,
     questBadgeCount,
     questNotify,
@@ -700,6 +805,7 @@ export function useGameState() {
     startMercBattle,
     tAtk,
     tDef,
+    trainingCards,
     tMhp,
     tSpd,
     tab,
@@ -712,5 +818,6 @@ export function useGameState() {
     submitBid,
     toggleSelectedScroll,
     wCat,
+    enhanceItems,
   };
 }
