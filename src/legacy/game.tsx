@@ -14,18 +14,13 @@ import { EQUIP_SLOTS } from "../game/data/equipmentSlots";
 import { EXPEDITIONS } from "../game/data/expeditions";
 import { MERC_DUNGEONS } from "../game/data/mercenaries";
 import { MONSTERS } from "../game/data/monsters";
-import { QUEST_DEFS } from "../game/data/quests";
 import { TRAIN_STATS } from "../game/data/trainStats";
 import { WEAPON_CATEGORIES } from "../game/data/weaponCategories";
 import { TRAIN_STAT_DISPLAY_KEYS } from "../game/lib/display";
 import { calcSellPrice, enhanceCost } from "../game/lib/items";
 import { trainCost } from "../game/lib/training";
 import {
-  checkQuestReset,
-  cMhp,
-  genMercScroll,
   getRarity,
-  isQuestDone,
 } from "../game/systems";
 import { useGameState } from "../game/useGameState";
 
@@ -56,6 +51,7 @@ function App() {
     discardLoot,
     doEnhance,
     doTrain,
+    addFreeMercScroll,
     enhanceAnim,
     enhanceLog,
     enhanceTarget,
@@ -64,38 +60,38 @@ function App() {
     expPct,
     filteredInv,
     filteredShop,
+    closeReplay,
+    handleTabSelect,
     initArena,
     invFilter,
     inventory,
     lootDrop,
     mercScrollsInInv,
-    placeBid,
+    openBattleReport,
     player,
+    questBadgeCount,
     questNotify,
-    questState,
+    renderedQuestState,
     refreshAuction,
     refreshShop,
     replay,
     reset,
+    restartReplayBattle,
     save,
     saveMsg,
     selectedScrolls,
+    selectMercScrollFromInventory,
     sellItem,
     sellJunk,
-    setBidInput,
     setEnhanceTarget,
-    setInventory,
     setInvFilter,
-    setPlayer,
-    setReplay,
-    setSelectedScrolls,
     setShopFilter,
     setShopTab,
-    setTab,
     shopFilter,
     shopTab,
     SLOT_FILTERS,
     sortInventory,
+    skipReplay,
     startArenaBattle,
     startBattle,
     startExpedition,
@@ -106,7 +102,11 @@ function App() {
     tSpd,
     tab,
     takeLoot,
+    toggleSelectedScroll,
     unequip,
+    updateBidInputValue,
+    useInventoryPotion,
+    submitBid,
     wCat,
   } = state;
 
@@ -229,23 +229,21 @@ function App() {
             <div className="nt">
               {[["dungeon","地下城"],["arena","🏟 競技場"],["quest","📋 任務"],["shop","商店"],["inventory","背包"],["train","⚒ 鍛造"]].map(([id,lbl])=>{
                 const isQuest = id==="quest";
-                const statsWithInv2 = {...player, _inv:inventory};
-                const qDone = isQuest ? Object.keys(QUEST_DEFS).filter(qid=>isQuestDone(qid,statsWithInv2,questState)).length : 0;
                 return(
                   <button key={id} className={`nb${tab===id?" active":""}`}
                     style={{position:"relative"}}
-                    onClick={()=>{setTab(id);if(id==="arena"&&arenaOpponents.length===0)initArena();}}>
+                    onClick={()=>handleTabSelect(id)}>
                     {lbl}
-                    {isQuest&&qDone>0&&(
+                    {isQuest&&questBadgeCount>0&&(
                       <span style={{position:"absolute",top:4,right:4,background:"#c84040",color:"#fff",
                         borderRadius:"8px",padding:"0 4px",fontSize:9,lineHeight:"14px",fontFamily:"sans-serif"}}>
-                        {qDone}
+                        {questBadgeCount}
                       </span>
                     )}
                   </button>
                 );
               })}
-              {replay&&<button className={`nb${tab==="battle"?" active":""}`} onClick={()=>setTab("battle")}>{replay.won?"🏆":"⚔"} 報告</button>}
+              {replay&&<button className={`nb${tab==="battle"?" active":""}`} onClick={openBattleReport}>{replay.won?"🏆":"⚔"} 報告</button>}
             </div>
 
             <div className="ca">
@@ -327,10 +325,7 @@ function App() {
                         背包中沒有傭兵契約捲軸<br/>
                         <span style={{fontSize:11,color:"#3a2818"}}>探險和副本Boss有機率掉落</span>
                         <div style={{marginTop:8}}>
-                          <button className="btn btm" style={{fontSize:10}} onClick={()=>{
-                            const s=genMercScroll(player.level);
-                            setInventory(inv=>[...inv,s]);
-                          }}>🎲 購買隨機捲軸（免費測試）</button>
+                          <button className="btn btm" style={{fontSize:10}} onClick={addFreeMercScroll}>🎲 購買隨機捲軸（免費測試）</button>
                         </div>
                       </div>
                     ) : (
@@ -349,7 +344,7 @@ function App() {
                                   borderRadius:5,padding:"10px",textAlign:"center",
                                   cursor:"pointer",transition:"all .2s",
                                 }}
-                                onClick={()=>setSelectedScrolls(p=>p.includes(scroll.uid)?p.filter(x=>x!==scroll.uid):[...p,scroll.uid])}>
+                                onClick={()=>toggleSelectedScroll(scroll.uid)}>
                                 <div style={{fontSize:22,filter:`drop-shadow(0 2px 6px ${gr.color}88)`}}>{scroll.icon}</div>
                                 <div style={{fontSize:9,color:gr.color,fontFamily:"'Cinzel',serif",borderColor:gr.color+"55",border:"1px solid",borderRadius:2,padding:"1px 4px",display:"inline-block",margin:"3px 0"}}>{gr.label}</div>
                                 <div style={{fontSize:11,color:gr.color,fontFamily:"'Cinzel',serif",letterSpacing:.3,textShadow:gr.glow?`0 0 8px ${gr.color}`:"none"}}>{scroll.name}</div>
@@ -558,7 +553,7 @@ function App() {
               {tab==="quest"&&<QuestTab
                 player={player}
                 inventory={inventory}
-                questState={checkQuestReset(questState, player)}
+                questState={renderedQuestState}
                 onCollect={collectQuest}
               />}
 
@@ -603,15 +598,15 @@ function App() {
 
                       <div className="bact" style={{marginTop:12}}>
                         {replay.cursor<replay.lines.length?(
-                          <button className="btn btm" onClick={()=>setReplay(r=>r?{...r,cursor:r.lines.length}:null)}>
+                          <button className="btn btm" onClick={skipReplay}>
                             ⏩ 跳過
                           </button>
                         ):(
                           <>
-                            <button className="btn btp" onClick={()=>replay.isArena?setTab("arena"):replay.isExpedition?startExpedition(replay.expedition):replay.isMerc?startMercBattle(replay.mercDungeonId):startBattle(replay.dungeon,replay.tier)}>
+                            <button className="btn btp" onClick={restartReplayBattle}>
                               {replay.isArena?"🏟 返回競技場":"⚔ 再次出征"}
                             </button>
-                            <button className="btn btm" onClick={()=>{setReplay(null);setTab("dungeon");}}>
+                            <button className="btn btm" onClick={closeReplay}>
                               ↩ 返回
                             </button>
                           </>
@@ -754,10 +749,10 @@ function App() {
                                 <input
                                   type="number" min={minNext} placeholder={minNext}
                                   value={myBid}
-                                  onChange={e=>setBidInput(b=>({...b,[it.auctionId]:parseInt(e.target.value)||""}))}
+                                  onChange={e=>updateBidInputValue(it.auctionId, e.target.value)}
                                   style={{width:90,background:"#0e0a05",border:"1px solid #4a3010",borderRadius:3,color:"#f0c040",padding:"5px 8px",fontSize:12,fontFamily:"'Cinzel',serif"}}
                                 />
-                                <button className="btn btp" style={{fontSize:10,padding:"6px 12px"}} onClick={()=>{placeBid(it.auctionId,myBid);setBidInput(b=>({...b,[it.auctionId]:""}));}} disabled={!myBid||myBid<minNext||player.gold<myBid}>出價</button>
+                                <button className="btn btp" style={{fontSize:10,padding:"6px 12px"}} onClick={()=>submitBid(it.auctionId,myBid)} disabled={!myBid||myBid<minNext||player.gold<myBid}>出價</button>
                                 {iWon&&<button className="btn btm" style={{fontSize:10,padding:"6px 12px"}} onClick={()=>claimAuction(it.auctionId)}>🎁 領取</button>}
                               </div>
                             </div>
@@ -835,7 +830,7 @@ function App() {
                           <div className="iis" style={{color:"#50a860"}}>回復 {item.heal}HP</div>
                           <div style={{color:"#f0c040",fontSize:11,marginBottom:4}}>售 🪙{calcSellPrice(item)}</div>
                           <div style={{display:"flex",gap:4}}>
-                            <button className="btn btm" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>{setPlayer(p=>({...p,hp:Math.min(p.hp+item.heal,cMhp(p))}));setInventory(inv=>inv.filter(i=>i.uid!==item.uid));}}>使用</button>
+                            <button className="btn btm" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>useInventoryPotion(item.uid)}>使用</button>
                             <button className="btn btd" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>sellItem(item.uid)}>賣出</button>
                           </div>
                         </div>
@@ -862,15 +857,12 @@ function App() {
                               ))}
                             </div>}
                             <div style={{fontSize:10,color:"#5a4828",fontStyle:"italic",margin:"4px 0"}}>{item.desc}</div>
-                            <div style={{color:"#f0c040",fontSize:11,marginBottom:4}}>售 🪙{calcSellPrice(item)}</div>
-                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                              <button className="btn btp" style={{width:"100%",fontSize:10}} onClick={()=>{
-                                setSelectedScrolls(p=>p.includes(item.uid)?p.filter(x=>x!==item.uid):[...p,item.uid]);
-                                setTab("dungeon");
-                              }}>
-                                {selectedScrolls.includes(item.uid)?"✓ 已選（去副本）":"選入傭兵隊"}
-                              </button>
-                              <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
+                             <div style={{color:"#f0c040",fontSize:11,marginBottom:4}}>售 🪙{calcSellPrice(item)}</div>
+                             <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                               <button className="btn btp" style={{width:"100%",fontSize:10}} onClick={()=>selectMercScrollFromInventory(item.uid)}>
+                                 {selectedScrolls.includes(item.uid)?"✓ 已選（去副本）":"選入傭兵隊"}
+                               </button>
+                               <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
                             </div>
                           </div>
                         );
