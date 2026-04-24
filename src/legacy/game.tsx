@@ -7,6 +7,7 @@ import {
   INITIAL_PLAYER,
 } from "../game/constants";
 import { AffixLines } from "../components/AffixLines";
+import { BattleLog } from "../components/BattleLog";
 import { HpBar } from "../components/HpBar";
 import { ReplayLog } from "../components/ReplayLog";
 import { DUNGEON_TIERS } from "../game/data/dungeonTiers";
@@ -1338,6 +1339,15 @@ function App() {
                       </div>
 
                       <ReplayLog lines={replay.lines} cursor={replay.cursor}/>
+
+                      {replay.cursor >= replay.lines.length && (
+                        <div style={{marginTop:12}}>
+                          <div style={{fontSize:10,color:"#5a4020",fontFamily:"'Cinzel',serif",letterSpacing:1,marginBottom:4,textAlign:"center"}}>
+                            戰鬥摘要
+                          </div>
+                          <BattleLog log={replay.lines}/>
+                        </div>
+                      )}
 
                       <div className="bact" style={{marginTop:12}}>
                         {replay.cursor<replay.lines.length?(
