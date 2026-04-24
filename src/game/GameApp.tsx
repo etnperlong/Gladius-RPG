@@ -1,4 +1,4 @@
-import "./game.css";
+import "../legacy/game.css";
 
 import { HpBar } from "../components/HpBar";
 import { ItemCard } from "../components/ItemCard";
@@ -10,21 +10,9 @@ import { InventoryTab } from "../features/inventory/InventoryTab";
 import { QuestTab } from "../features/quests/QuestTab";
 import { ShopTab } from "../features/shop/ShopTab";
 import { TrainTab } from "../features/train/TrainTab";
-import { useGameState } from "../game/useGameState";
+import { useGameState } from "./useGameState";
 
-// ══════════════════════════════════════════════════════════════════════════════
-// QUEST SYSTEM
-// ══════════════════════════════════════════════════════════════════════════════
-
-// ── Arena section continues below ─────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
-// ARENA SYSTEM — PvP opponents, injury timer, gold plunder
-// ══════════════════════════════════════════════════════════════════════════════
-// Simulate Arena PvP fight (player vs opponent)
-// Returns {log, won, goldPlundered}
-
-
-function App() {
+export default function GameApp() {
   const state = useGameState();
   const {
     arenaInjuredUntil,
@@ -39,15 +27,11 @@ function App() {
     equipmentSidebarItems,
     enhanceAnim,
     enhanceLog,
-    equipItem,
     equipLootNow,
     expeditionCards,
     expPct,
-    filteredShop,
     closeReplay,
-    handleTabSelect,
     initArena,
-    invFilter,
     inventory,
     inventoryFilterOptions,
     inventoryItems,
@@ -88,7 +72,6 @@ function App() {
     tSpd,
     tab,
     takeLoot,
-    unequip,
     wCat,
     enhanceItems,
   } = state;
@@ -101,7 +84,6 @@ function App() {
           <div className="gd">🪙 {player.gold}</div>
         </header>
         <div className="ml">
-          {/* ── Sidebar ── */}
           <aside className="sb">
             <div className="pn">
               <div className="ph">角色</div>
@@ -110,19 +92,19 @@ function App() {
                 <HpBar cur={player.hp} max={tMhp} />
                 <div className="bw">
                   <div className="bl"><span>Lv.{player.level}</span><span>{player.exp}/{player.expNeeded}</span></div>
-                  <div className="bt"><div className="bf ef" style={{width:`${expPct}%`}}/></div>
+                  <div className="bt"><div className="bf ef" style={{ width: `${expPct}%` }} /></div>
                 </div>
-                <div style={{marginTop:8}}>
+                <div style={{ marginTop: 8 }}>
                   {[
-                    ["攻擊", tAtk, player.trainedAtk||0],
-                    ["防禦", tDef, player.trainedDef||0],
-                    ["速度", tSpd, player.trainedSpd||0],
-                  ].map(([k,v,trained])=>(
+                    ["攻擊", tAtk, player.trainedAtk || 0],
+                    ["防禦", tDef, player.trainedDef || 0],
+                    ["速度", tSpd, player.trainedSpd || 0],
+                  ].map(([k, v, trained]) => (
                     <div className="sr" key={k}>
                       <span className="sl">{k}</span>
                       <span className="sv">
                         {v}
-                        {trained>0&&<span style={{fontSize:10,color:"#4caf50",marginLeft:3}}>+{trained}訓</span>}
+                        {trained > 0 && <span style={{ fontSize: 10, color: "#4caf50", marginLeft: 3 }}>+{trained}訓</span>}
                       </span>
                     </div>
                   ))}
@@ -130,50 +112,50 @@ function App() {
                     <span className="sl">最大HP</span>
                     <span className="sv">
                       {tMhp}
-                      {(player.trainedHp||0)>0&&<span style={{fontSize:10,color:"#c84040",marginLeft:3}}>+{(player.trainedHp||0)*3}訓</span>}
+                      {(player.trainedHp || 0) > 0 && <span style={{ fontSize: 10, color: "#c84040", marginLeft: 3 }}>+{(player.trainedHp || 0) * 3}訓</span>}
                     </span>
                   </div>
                 </div>
-                {wCat&&<div className="weapon-trait">{wCat.icon} {wCat.label}：{wCat.traitDesc}</div>}
+                {wCat && <div className="weapon-trait">{wCat.icon} {wCat.label}：{wCat.traitDesc}</div>}
               </div>
             </div>
 
             <div className="pn">
               <div className="ph">裝備（點擊卸下）</div>
-              <div className="pb" style={{padding:"8px 10px"}}>
-                {equipmentSidebarItems.map(({ category, equippedItem, onUnequip, rarityColor, slot, style, textShadow, title })=>{
-                  return(
+              <div className="pb" style={{ padding: "8px 10px" }}>
+                {equipmentSidebarItems.map(({ category, equippedItem, onUnequip, rarityColor, slot, style, textShadow, title }) => {
+                  return (
                     <div key={slot.id}
                       onClick={onUnequip}
                       title={title}
                       style={style}>
-                      <span style={{fontSize:13,flexShrink:0,marginTop:1}}>{slot.icon}</span>
-                      <div style={{minWidth:0,flex:1}}>
-                        <div style={{fontSize:9,color:"#4a3020",fontFamily:"'Cinzel',serif",letterSpacing:.5,lineHeight:1}}>{slot.label}</div>
+                      <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>{slot.icon}</span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 9, color: "#4a3020", fontFamily: "'Cinzel',serif", letterSpacing: 0.5, lineHeight: 1 }}>{slot.label}</div>
                         {equippedItem ? <>
                           <div style={{
-                            fontSize:11, color:rarityColor, lineHeight:1.3, marginTop:1,
+                            fontSize: 11, color: rarityColor, lineHeight: 1.3, marginTop: 1,
                             textShadow,
-                            fontFamily:"'Cinzel',serif", letterSpacing:.3,
+                            fontFamily: "'Cinzel',serif", letterSpacing: 0.3,
                           }}>{equippedItem.name}</div>
-                          <div style={{fontSize:10,color:"#6a5030",marginTop:2,display:"flex",gap:6,flexWrap:"wrap"}}>
-                            {equippedItem.attack>0 && <span style={{color:"#c8781e"}}>攻+{equippedItem.attack}</span>}
-                            {equippedItem.defense>0 && <span style={{color:"#4a9fd4"}}>防+{equippedItem.defense}</span>}
-                            {equippedItem.hp>0 && <span style={{color:"#c84040"}}>HP+{equippedItem.hp}</span>}
-                            {equippedItem.speed>0 && <span style={{color:"#4caf50"}}>速+{equippedItem.speed}</span>}
-                            {category && <span style={{color:"#d08030"}}>{category.icon}{category.label}</span>}
-                            {equippedItem.itemLevel && <span style={{color:"#5a4020"}}>Lv{equippedItem.itemLevel}</span>}
+                          <div style={{ fontSize: 10, color: "#6a5030", marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {equippedItem.attack > 0 && <span style={{ color: "#c8781e" }}>攻+{equippedItem.attack}</span>}
+                            {equippedItem.defense > 0 && <span style={{ color: "#4a9fd4" }}>防+{equippedItem.defense}</span>}
+                            {equippedItem.hp > 0 && <span style={{ color: "#c84040" }}>HP+{equippedItem.hp}</span>}
+                            {equippedItem.speed > 0 && <span style={{ color: "#4caf50" }}>速+{equippedItem.speed}</span>}
+                            {category && <span style={{ color: "#d08030" }}>{category.icon}{category.label}</span>}
+                            {equippedItem.itemLevel && <span style={{ color: "#5a4020" }}>Lv{equippedItem.itemLevel}</span>}
                           </div>
                           {equippedItem.affixes && equippedItem.affixes.length > 0 && (
-                            <div style={{marginTop:2,display:"flex",gap:3,flexWrap:"wrap"}}>
-                              {equippedItem.affixes.map((a: any,i: any)=>(
-                                <span key={i} style={{fontSize:9,color:a.special?"#c870d0":"#6aaa6a",background:"rgba(0,0,0,0.3)",padding:"0 3px",borderRadius:2}}>
+                            <div style={{ marginTop: 2, display: "flex", gap: 3, flexWrap: "wrap" }}>
+                              {equippedItem.affixes.map((a: any, i: any) => (
+                                <span key={i} style={{ fontSize: 9, color: a.special ? "#c870d0" : "#6aaa6a", background: "rgba(0,0,0,0.3)", padding: "0 3px", borderRadius: 2 }}>
                                   {a.tag}
                                 </span>
                               ))}
                             </div>
                           )}
-                        </> : <div style={{fontSize:10,color:"#2a1808",fontStyle:"italic"}}>空槽</div>}
+                        </> : <div style={{ fontSize: 10, color: "#2a1808", fontStyle: "italic" }}>空槽</div>}
                       </div>
                     </div>
                   );
@@ -188,36 +170,33 @@ function App() {
                   <button className="btn btp" onClick={save}>💾 存檔</button>
                   <button className="btn btm" onClick={reset}>🔄 重置</button>
                 </div>
-                {saveMsg&&<div className="svi">{saveMsg}</div>}
+                {saveMsg && <div className="svi">{saveMsg}</div>}
               </div>
             </div>
           </aside>
 
-          {/* ── Main ── */}
           <main>
             <div className="nt">
-              {navTabs.map(({ id, label, badgeCount, onSelect })=>{
-                return(
-                  <button key={id} className={`nb${tab===id?" active":""}`}
-                    style={{position:"relative"}}
+              {navTabs.map(({ id, label, badgeCount, onSelect }) => {
+                return (
+                  <button key={id} className={`nb${tab === id ? " active" : ""}`}
+                    style={{ position: "relative" }}
                     onClick={onSelect}>
                     {label}
-                    {badgeCount>0&&(
-                      <span style={{position:"absolute",top:4,right:4,background:"#c84040",color:"#fff",
-                        borderRadius:"8px",padding:"0 4px",fontSize:9,lineHeight:"14px",fontFamily:"sans-serif"}}>
+                    {badgeCount > 0 && (
+                      <span style={{ position: "absolute", top: 4, right: 4, background: "#c84040", color: "#fff",
+                        borderRadius: "8px", padding: "0 4px", fontSize: 9, lineHeight: "14px", fontFamily: "sans-serif" }}>
                         {badgeCount}
                       </span>
                     )}
                   </button>
                 );
               })}
-              {replay&&<button className={`nb${tab==="battle"?" active":""}`} onClick={openBattleReport}>{replay.won?"🏆":"⚔"} 報告</button>}
+              {replay && <button className={`nb${tab === "battle" ? " active" : ""}`} onClick={openBattleReport}>{replay.won ? "🏆" : "⚔"} 報告</button>}
             </div>
 
             <div className="ca">
-
-              {/* ── DUNGEON TAB ── */}
-              {tab==="dungeon"&&(
+              {tab === "dungeon" && (
                 <DungeonTab
                   expeditionCards={expeditionCards}
                   dungeonSections={dungeonSections}
@@ -229,7 +208,6 @@ function App() {
                 />
               )}
 
-              {/* ── TRAIN & ENHANCE TAB ── */}
               {tab === "train" && (
                 <TrainTab
                   trainingCards={trainingCards}
@@ -239,8 +217,7 @@ function App() {
                 />
               )}
 
-              {/* ── ARENA TAB ── */}
-              {tab==="arena"&&<ArenaTab
+              {tab === "arena" && <ArenaTab
                 player={player}
                 arenaOpponents={arenaOpponents}
                 arenaInjuredUntil={arenaInjuredUntil}
@@ -250,15 +227,13 @@ function App() {
                 onInit={initArena}
               />}
 
-              {/* ── QUEST TAB ── */}
-              {tab==="quest"&&<QuestTab
+              {tab === "quest" && <QuestTab
                 player={player}
                 inventory={inventory}
                 questState={renderedQuestState}
                 onCollect={collectQuest}
               />}
 
-              {/* ── BATTLE REPLAY ── */}
               {tab === "battle" && (
                 <BattleReport
                   replay={replay}
@@ -269,7 +244,6 @@ function App() {
                 />
               )}
 
-              {/* ── SHOP ── */}
               {tab === "shop" && (
                 <ShopTab
                   playerGold={player.gold}
@@ -290,7 +264,6 @@ function App() {
                 />
               )}
 
-              {/* ── INVENTORY ── */}
               {tab === "inventory" && (
                 <InventoryTab
                   inventoryCount={inventory.length}
@@ -301,22 +274,19 @@ function App() {
                   onSellJunk={sellJunk}
                 />
               )}
-
             </div>
           </main>
         </div>
 
-        {/* Quest completion notification */}
-        {questNotify&&(
+        {questNotify && (
           <div className="quest-notify">
-            {questNotify.split("\n").map((line,i)=>(
-              <div key={i} style={{marginBottom:i===0?4:0}}>{line}</div>
+            {questNotify.split("\n").map((line, i) => (
+              <div key={i} style={{ marginBottom: i === 0 ? 4 : 0 }}>{line}</div>
             ))}
           </div>
         )}
 
-        {/* Loot Popup */}
-        {lootDrop&&<LootPopup
+        {lootDrop && <LootPopup
           item={lootDrop}
           onEquip={equipLootNow}
           onTake={takeLoot}
@@ -325,8 +295,4 @@ function App() {
       </div>
     </>
   );
-}
-
-export default function LegacyGame() {
-  return <App />;
 }
