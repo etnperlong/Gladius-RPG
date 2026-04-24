@@ -44,68 +44,17 @@ import {
   simulateRun,
 } from "../game/systems";
 import type {
-  RuntimeArenaOpponent,
   RuntimeLogEntry,
-  RuntimeItem,
-  RuntimePlayer,
-  RuntimeQuestState,
-  RuntimeReplay,
 } from "../game/types";
-
-type AnyRecord = Record<string, any>;
-type AnyList = any[];
-type LegacyItem = RuntimeItem & AnyRecord & {
-  uid: any;
-  name: any;
-  icon: any;
-  rarity: any;
-  cat: any;
-  attack: any;
-  defense: any;
-  hp: any;
-  speed: any;
-  heal: any;
-  enhLv: any;
-  itemLevel: any;
-  slot: any;
-  type: any;
-  cost: any;
-  affixes: any[];
-  specials: any[];
-};
-type LegacyPlayer = RuntimePlayer & AnyRecord & {
-  level: any;
-  exp: any;
-  expNeeded: any;
-  hp: any;
-  maxHp: any;
-  attack: any;
-  defense: any;
-  speed: any;
-  gold: any;
-  equipment: AnyRecord;
-};
-type LegacyQuestState = RuntimeQuestState & AnyRecord;
-type LegacyArenaOpponent = Omit<RuntimeArenaOpponent, "equipment"> & AnyRecord & {
-  equipment: AnyRecord;
-  attack: any;
-  defense: any;
-  maxHp: any;
-  hp: any;
-  goldCarried: any;
-};
-type LegacyReplay = Omit<RuntimeReplay, "drops" | "dungeon" | "tier" | "expedition" | "opponent"> & AnyRecord & {
-  lines: any[];
-  cursor: any;
-  drops: LegacyItem[];
-  won?: any;
-  dungeon?: any;
-  tier?: any;
-  expedition?: any;
-  opponent?: any;
-};
-type LootDrop = LegacyItem & { _remaining?: LegacyItem[] };
-
+import type {
+  AnyRecord,
+  LegacyArenaOpponent,
+  LegacyItem,
+  LegacyPlayer,
+  LegacyQuestState,
+  LegacyReplay,
+  LootDrop,
+} from "./types";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // QUEST SYSTEM
