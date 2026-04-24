@@ -1,11 +1,10 @@
 import "./game.css";
 
-import { BattleLog } from "../components/BattleLog";
 import { HpBar } from "../components/HpBar";
 import { ItemCard } from "../components/ItemCard";
 import { LootPopup } from "../components/LootPopup";
-import { ReplayLog } from "../components/ReplayLog";
 import { ArenaTab } from "../features/arena/ArenaTab";
+import { BattleReport } from "../features/battle/BattleReport";
 import { DungeonTab } from "../features/dungeon/DungeonTab";
 import { QuestTab } from "../features/quests/QuestTab";
 import { TrainTab } from "../features/train/TrainTab";
@@ -263,58 +262,14 @@ function App() {
               />}
 
               {/* ── BATTLE REPLAY ── */}
-              {tab==="battle"&&(
-                <div className="ba">
-                  {replay ? (
-                    <>
-                      <div className="btl">{replaySummary?.title}</div>
-
-                      <div style={{marginBottom:12}}>
-                        <div style={{fontSize:10,color:"#5a4020",fontFamily:"'Cinzel',serif",letterSpacing:1,marginBottom:4,textAlign:"center"}}>
-                          {replaySummary?.statusText}
-                        </div>
-                        <div className="bt" style={{height:5}}>
-                          <div className="bf" style={{
-                            width:replaySummary?.progressWidth,
-                            background:replaySummary?.progressBackground
-                          }}/>
-                        </div>
-                      </div>
-
-                      <ReplayLog lines={replay.lines} cursor={replay.cursor}/>
-
-                      {replaySummary?.showBattleSummary && (
-                        <div style={{marginTop:12}}>
-                          <div style={{fontSize:10,color:"#5a4020",fontFamily:"'Cinzel',serif",letterSpacing:1,marginBottom:4,textAlign:"center"}}>
-                            戰鬥摘要
-                          </div>
-                          <BattleLog log={replay.lines}/>
-                        </div>
-                      )}
-
-                      <div className="bact" style={{marginTop:12}}>
-                        {replay.cursor<replay.lines.length?(
-                          <button className="btn btm" onClick={skipReplay}>
-                            ⏩ 跳過
-                          </button>
-                        ):(
-                          <>
-                            <button className="btn btp" onClick={restartReplayBattle}>
-                              {replaySummary?.actionLabel}
-                            </button>
-                            <button className="btn btm" onClick={closeReplay}>
-                              ↩ 返回
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  ):(
-                    <div style={{textAlign:"center",color:"#5a4020",fontFamily:"'Cinzel',serif",fontSize:13,marginTop:40}}>
-                      選擇副本出發！
-                    </div>
-                  )}
-                </div>
+              {tab === "battle" && (
+                <BattleReport
+                  replay={replay}
+                  replaySummary={replaySummary}
+                  onClose={closeReplay}
+                  onRestart={restartReplayBattle}
+                  onSkip={skipReplay}
+                />
               )}
 
               {/* ── SHOP ── */}
