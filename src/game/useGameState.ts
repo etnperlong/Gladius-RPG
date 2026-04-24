@@ -5,7 +5,12 @@ import {
   INITIAL_PLAYER,
 } from "./constants";
 import { ENHANCE_LEVELS } from "./data/enhanceLevels";
+import { DUNGEON_TIERS } from "./data/dungeonTiers";
+import { DUNGEONS } from "./data/dungeons";
+import { EQUIP_SLOTS } from "./data/equipmentSlots";
+import { EXPEDITIONS } from "./data/expeditions";
 import { MERC_DUNGEONS } from "./data/mercenaries";
+import { MONSTERS } from "./data/monsters";
 import { QUEST_DEFS } from "./data/quests";
 import { TRAIN_STATS } from "./data/trainStats";
 import { WEAPON_CATEGORIES } from "./data/weaponCategories";
@@ -106,7 +111,50 @@ export function useGameState() {
     { id: "shop", label: "商店", badgeCount: 0 },
     { id: "inventory", label: "背包", badgeCount: 0 },
     { id: "train", label: "⚒ 鍛造", badgeCount: 0 },
-  ];
+  ].map((tabItem) => ({
+    ...tabItem,
+    onSelect: () => handleTabSelect(tabItem.id),
+  }));
+  const expeditionCards = EXPEDITIONS.map((expedition) => {
+    const monster = MONSTERS[expedition.monster];
+    const locked = player.level < expedition.minLv;
+
+    return {
+      expedition,
+      icon: (monster && monster.icon) || expedition.icon,
+      isLocked: locked,
+      monsterName: monster && monster.name,
+      onStart: locked ? undefined : () => startExpedition(expedition),
+      style: { borderColor: locked ? "#2a1808" : "#3a2a10" },
+      traitDesc: monster && monster.traitDesc,
+    };
+  });
+  const dungeonSections = DUNGEONS.map((dungeon) => ({
+    bossIcon: MONSTERS[dungeon.boss] ? MONSTERS[dungeon.boss].icon : "👑",
+    bossName: MONSTERS[dungeon.boss] ? MONSTERS[dungeon.boss].name : "Boss",
+    icon: dungeon.icon,
+    id: dungeon.id,
+    lore: dungeon.lore,
+    minLv: dungeon.minLv,
+    name: dungeon.name,
+    tierCards: DUNGEON_TIERS.map((tier) => {
+      const req = dungeon.minLv + tier.minLvOffset;
+      const locked = player.level < req;
+
+      return {
+        dungeon,
+        isLocked: locked,
+        onStart: locked ? undefined : () => startBattle(dungeon, tier),
+        req,
+        tier,
+      };
+    }),
+    waveBadges: dungeon.waves.map((wave: any) => ({
+      enemies: wave.monsters.map((key: any) => (MONSTERS[key] ? MONSTERS[key].icon : "?")).join(""),
+      key: wave.label,
+      label: wave.label.replace("第", "").replace("波", "") + "波",
+    })),
+  }));
 
   function lvUp(np: any, expG: any, goldG: any, log: any) {
     const withGold = { ...np, gold: (np.gold || 0) + goldG };
@@ -176,10 +224,10 @@ export function useGameState() {
     updateQuestProgress(fp, inventory);
   };
 
-  const handleTabSelect = (nextTab: string) => {
+  function handleTabSelect(nextTab: string) {
     setTab(nextTab);
     if (nextTab === "arena" && arenaOpponents.length === 0) initArena();
-  };
+  }
 
   useEffect(() => {
     if (!replay || replay.cursor >= replay.lines.length) return;
@@ -227,6 +275,49 @@ export function useGameState() {
 
   const mercScrollsInInv = inventory.filter((i) => i.type === "merc_scroll");
   const selectedScrollObjs = selectedScrolls.map((uid) => inventory.find((i) => i.uid === uid)).filter(Boolean);
+  const mercSelectionCards = mercScrollsInInv.map((scroll) => {
+    const rarity = getRarity(scroll.rarity);
+    const selected = selectedScrolls.includes(scroll.uid);
+
+    return {
+      rarity,
+      scroll,
+      selected,
+      onToggle: () => toggleSelectedScroll(scroll.uid),
+      style: {
+        background: `linear-gradient(160deg,${rarity.color}12,#0e0a06)`,
+        border: `1px solid ${selected ? rarity.color : `${rarity.color}44`}`,
+        boxShadow: selected && rarity.glow ? rarity.glow : "none",
+        borderRadius: 5,
+        padding: "10px",
+        textAlign: "center" as const,
+        cursor: "pointer",
+        transition: "all .2s",
+      },
+      statusText: selected ? "✓ 已選" : scroll.desc,
+      statusTextColor: selected ? rarity.color : "#4a3020",
+    };
+  });
+  const mercDungeonCards = MERC_DUNGEONS.map((dungeon, index) => {
+    const locked = player.level < dungeon.minLv;
+    const tierColors = ["#8a9070", "#4caf50", "#4a9fd4", "#9c50d4", "#e07020"];
+    const tierColor = tierColors[index] || "#8a9070";
+
+    return {
+      dungeon,
+      enemyGroups: dungeon.waves.map((wave: any, waveIndex: number) => ({
+        enemies: wave.enemies.map((key: any) => (MONSTERS[key] ? MONSTERS[key].icon : "👹")).join(""),
+        key: waveIndex,
+      })),
+      isLocked: locked,
+      onStart: locked ? undefined : () => startMercBattle(dungeon.id),
+      style: {
+        borderColor: locked ? "#2a1808" : `${tierColor}66`,
+        background: locked ? "linear-gradient(135deg,#1a1208,#141008)" : `linear-gradient(135deg,${tierColor}0a,#141008)`,
+      },
+      tierColor,
+    };
+  });
 
   const startMercBattle = (dungeonId: any) => {
     const dungeon = MERC_DUNGEONS.find((d) => d.id === dungeonId) || MERC_DUNGEONS[0];
@@ -265,9 +356,9 @@ export function useGameState() {
     setInventory((inv) => [...inv, s]);
   };
 
-  const toggleSelectedScroll = (uid: any) => {
+  function toggleSelectedScroll(uid: any) {
     setSelectedScrolls((prev) => (prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]));
-  };
+  }
 
   const selectMercScrollFromInventory = (uid: any) => {
     toggleSelectedScroll(uid);
@@ -623,6 +714,23 @@ export function useGameState() {
     setTab("battle");
   };
 
+  const replaySummary = replay
+    ? {
+        actionLabel: replay.isArena ? "🏟 返回競技場" : "⚔ 再次出征",
+        progressBackground: replay.won ? "linear-gradient(90deg,#1a5a1a,#40a040)" : "linear-gradient(90deg,#5a1a1a,#a04040)",
+        progressWidth: `${Math.round((replay.cursor / replay.lines.length) * 100)}%`,
+        showBattleSummary: replay.cursor >= replay.lines.length,
+        statusText: replay.cursor < replay.lines.length ? "戰鬥回放中..." : "— 戰鬥結束 —",
+        title: replay.isArena
+          ? `🏟 競技場 · ${(replay.opponent && replay.opponent.name) || "對手"}`
+          : replay.isExpedition
+            ? `🗺 ${replay.expedition && replay.expedition.name}`
+            : replay.isMerc
+              ? `🏴 ${MERC_DUNGEONS.find((d) => d.id === replay.mercDungeonId)?.label || "傭兵副本"}`
+              : `${replay.dungeon ? `${replay.dungeon.icon} ${replay.dungeon.name}` : "⚔"}${!replay.isExpedition && !replay.isMerc && !replay.isArena ? ` · ${replay.tier && replay.tier.label}` : ""}`,
+      }
+    : null;
+
   const trainingCards = TRAIN_STATS.map((stat) => {
     const current = player[stat.id] || 0;
     const displayKey = TRAIN_STAT_DISPLAY_KEYS[stat.id];
@@ -708,6 +816,63 @@ export function useGameState() {
       rar,
     };
   });
+  const shopFilterOptions = ["all", "weapon", "offhand", "armor", "helmet", "gloves", "boots", "ring", "amulet"].map((filterId) => {
+    const slotDef = EQUIP_SLOTS.find((slot) => slot.id === filterId);
+
+    return {
+      id: filterId,
+      isActive: shopFilter === filterId,
+      label: filterId === "all" ? "全部" : slotDef ? slotDef.label : filterId,
+      onSelect: () => setShopFilter(filterId),
+    };
+  });
+  const shopTabOptions = [["buy", "🏪 購買"], ["auction", "🔨 競標"], ["sell", "💰 賣出"]].map(([id, label]) => ({
+    id,
+    isActive: shopTab === id,
+    label,
+    onSelect: () => setShopTab(id),
+  }));
+  const sellableInventory = inventory.filter((item) => item.type !== "potion");
+  const hasSellableInventory = sellableInventory.length > 0;
+  const sellListItems = sellableInventory.map((item) => {
+    const rarity = getRarity(item.rarity);
+    const price = calcSellPrice(item);
+
+    return {
+      item,
+      onEquip: item.type === "merc_scroll" ? undefined : () => equipItem(item),
+      onSell: () => sellItem(item.uid),
+      price,
+      rarity,
+      selectLabel: selectedScrolls.includes(item.uid) ? "✓ 已選（去副本）" : "選入傭兵隊",
+      onSelect: item.type === "merc_scroll" ? () => selectMercScrollFromInventory(item.uid) : undefined,
+    };
+  });
+  const filteredShop = shopFilter === "all" ? shopItems : shopItems.filter((i) => i.slot === shopFilter || i.type === shopFilter);
+  const filteredInv = invFilter === "all" ? inventory : inventory.filter((i) => i.slot === invFilter || i.type === invFilter);
+  const potions = inventory.filter((i) => i.type === "potion").length;
+  const expPct = Math.round((player.exp / player.expNeeded) * 100);
+  const shopDisplayItems = filteredShop.map((item) => ({
+    cat: item.cat ? WEAPON_CATEGORIES[item.cat] : null,
+    item,
+    onBuy: () => buyItem(item),
+    rarity: getRarity(item.rarity),
+  }));
+  const inventoryItems = filteredInv.map((item) => {
+    const rarity = getRarity(item.rarity);
+    const price = calcSellPrice(item);
+
+    return {
+      item,
+      onEquip: item.type === "weapon" || item.slot ? () => equipItem(item) : undefined,
+      onSelectMerc: item.type === "merc_scroll" ? () => selectMercScrollFromInventory(item.uid) : undefined,
+      onSell: () => sellItem(item.uid),
+      onUse: item.type === "potion" ? () => useInventoryPotion(item.uid) : undefined,
+      price,
+      rarity,
+      selectLabel: selectedScrolls.includes(item.uid) ? "✓ 已選（去副本）" : "選入傭兵隊",
+    };
+  });
 
   const SLOT_FILTERS = [
     { id: "all", label: "全部" },
@@ -722,11 +887,11 @@ export function useGameState() {
     { id: "potion", label: "藥水" },
     { id: "merc_scroll", label: "📜傭兵" },
   ];
-
-  const filteredShop = shopFilter === "all" ? shopItems : shopItems.filter((i) => i.slot === shopFilter || i.type === shopFilter);
-  const filteredInv = invFilter === "all" ? inventory : inventory.filter((i) => i.slot === invFilter || i.type === invFilter);
-  const potions = inventory.filter((i) => i.type === "potion").length;
-  const expPct = Math.round((player.exp / player.expNeeded) * 100);
+  const inventoryFilterOptions = SLOT_FILTERS.map((filter) => ({
+    ...filter,
+    isActive: invFilter === filter.id,
+    onSelect: () => setInvFilter(filter.id),
+  }));
 
   return {
     arenaInjuredUntil,
@@ -743,9 +908,11 @@ export function useGameState() {
     doEnhance,
     doTrain,
     addFreeMercScroll,
+    dungeonSections,
     enhanceAnim,
     enhanceLog,
     enhanceTarget,
+    expeditionCards,
     equipItem,
     equipLootNow,
     expPct,
@@ -754,10 +921,15 @@ export function useGameState() {
     closeReplay,
     handleTabSelect,
     handleBuyPotion,
+    hasSellableInventory,
     initArena,
     invFilter,
     inventory,
+    inventoryFilterOptions,
+    inventoryItems,
     lootDrop,
+    mercDungeonCards,
+    mercSelectionCards,
     mercScrollsInInv,
     navTabs,
     openBattleReport,
@@ -773,12 +945,14 @@ export function useGameState() {
     refreshAuction,
     refreshShop,
     replay,
+    replaySummary,
     reset,
     restartReplayBattle,
     save,
     saveMsg,
     selectedScrollObjs,
     selectedScrolls,
+    sellListItems,
     selectMercScrollFromInventory,
     sellItem,
     sellJunk,
@@ -794,7 +968,10 @@ export function useGameState() {
     setShopTab,
     setTab,
     shopFilter,
+    shopDisplayItems,
+    shopFilterOptions,
     shopItems,
+    shopTabOptions,
     shopTab,
     SLOT_FILTERS,
     sortInventory,

@@ -7,15 +7,9 @@ import { LootPopup } from "../components/LootPopup";
 import { ReplayLog } from "../components/ReplayLog";
 import { ArenaTab } from "../features/arena/ArenaTab";
 import { QuestTab } from "../features/quests/QuestTab";
-import { DUNGEON_TIERS } from "../game/data/dungeonTiers";
-import { DUNGEONS } from "../game/data/dungeons";
 import { ENHANCE_LEVELS } from "../game/data/enhanceLevels";
 import { EQUIP_SLOTS } from "../game/data/equipmentSlots";
-import { EXPEDITIONS } from "../game/data/expeditions";
-import { MERC_DUNGEONS } from "../game/data/mercenaries";
-import { MONSTERS } from "../game/data/monsters";
 import { WEAPON_CATEGORIES } from "../game/data/weaponCategories";
-import { calcSellPrice } from "../game/lib/items";
 import {
   getRarity,
 } from "../game/systems";
@@ -41,14 +35,15 @@ function App() {
     arenaRefresh,
     arenaRefreshes,
     auctionDisplayItems,
-    buyItem,
     collectQuest,
     discardLoot,
     addFreeMercScroll,
+    dungeonSections,
     enhanceAnim,
     enhanceLog,
     equipItem,
     equipLootNow,
+    expeditionCards,
     expPct,
     filteredInv,
     filteredShop,
@@ -57,7 +52,12 @@ function App() {
     initArena,
     invFilter,
     inventory,
+    inventoryFilterOptions,
+    inventoryItems,
+    hasSellableInventory,
     lootDrop,
+    mercDungeonCards,
+    mercSelectionCards,
     mercScrollsInInv,
     navTabs,
     openBattleReport,
@@ -68,26 +68,21 @@ function App() {
     refreshAuction,
     refreshShop,
     replay,
+    replaySummary,
     reset,
     restartReplayBattle,
     save,
     saveMsg,
     selectedScrolls,
-    selectMercScrollFromInventory,
-    sellItem,
+    sellListItems,
     sellJunk,
-    setInvFilter,
-    setShopFilter,
-    setShopTab,
-    shopFilter,
+    shopDisplayItems,
     shopTab,
-    SLOT_FILTERS,
+    shopFilterOptions,
+    shopTabOptions,
     sortInventory,
     skipReplay,
     startArenaBattle,
-    startBattle,
-    startExpedition,
-    startMercBattle,
     tAtk,
     tDef,
     trainingCards,
@@ -95,9 +90,7 @@ function App() {
     tSpd,
     tab,
     takeLoot,
-    toggleSelectedScroll,
     unequip,
-    useInventoryPotion,
     wCat,
     enhanceItems,
   } = state;
@@ -219,11 +212,11 @@ function App() {
           {/* ── Main ── */}
           <main>
             <div className="nt">
-              {navTabs.map(({ id, label, badgeCount })=>{
+              {navTabs.map(({ id, label, badgeCount, onSelect })=>{
                 return(
                   <button key={id} className={`nb${tab===id?" active":""}`}
                     style={{position:"relative"}}
-                    onClick={()=>handleTabSelect(id)}>
+                    onClick={onSelect}>
                     {label}
                     {badgeCount>0&&(
                       <span style={{position:"absolute",top:4,right:4,background:"#c84040",color:"#fff",
@@ -247,18 +240,16 @@ function App() {
                     挑戰單一怪物，風險低、速度快，是練等與賺金的好選擇。
                   </div>
                   <div className="dr" style={{gridTemplateColumns:"repeat(auto-fill,minmax(135px,1fr))"}}>
-                    {EXPEDITIONS.map(exp=>{
-                      const m=MONSTERS[exp.monster];
-                      const lk=player.level<exp.minLv;
+                    {expeditionCards.map(({ expedition, icon, isLocked, monsterName, onStart, style, traitDesc })=>{
                       return(
-                        <div key={exp.id} className={`dc${lk?" lk":""}`} onClick={()=>!lk&&startExpedition(exp)}
-                          style={{borderColor:lk?"#2a1808":"#3a2a10"}}>
-                          <div className="di">{(m&&m.icon)||exp.icon}</div>
-                          <div className="dn" style={{fontSize:11}}>{exp.name}</div>
-                          <div style={{fontSize:10,color:"#8a6a30",marginBottom:3,fontStyle:"italic"}}>{(m&&m.name)}</div>
-                          <div style={{fontSize:10,color:"#c8781e",marginBottom:4}}>{(m&&m.traitDesc)}</div>
-                          <div className="drq">Lv.{exp.minLv}{lk?" 🔒":""}</div>
-                          <div className="drw">EXP×{exp.expMult} 金×{exp.goldMult}{exp.lootBonus>0&&<span style={{color:"#4caf50"}}> +{Math.round(exp.lootBonus*100)}%</span>}</div>
+                        <div key={expedition.id} className={`dc${isLocked?" lk":""}`} onClick={onStart}
+                          style={style}>
+                          <div className="di">{icon}</div>
+                          <div className="dn" style={{fontSize:11}}>{expedition.name}</div>
+                          <div style={{fontSize:10,color:"#8a6a30",marginBottom:3,fontStyle:"italic"}}>{monsterName}</div>
+                          <div style={{fontSize:10,color:"#c8781e",marginBottom:4}}>{traitDesc}</div>
+                          <div className="drq">Lv.{expedition.minLv}{isLocked?" 🔒":""}</div>
+                          <div className="drw">EXP×{expedition.expMult} 金×{expedition.goldMult}{expedition.lootBonus>0&&<span style={{color:"#4caf50"}}> +{Math.round(expedition.lootBonus*100)}%</span>}</div>
                         </div>
                       );
                     })}
@@ -268,7 +259,7 @@ function App() {
                   <div style={{fontSize:12,color:"#5a4020",marginBottom:10,fontStyle:"italic"}}>
                     挑戰完整副本：三波怪物加上強力Boss，掉落更豐厚。
                   </div>
-                  {DUNGEONS.map(d=>(
+                  {dungeonSections.map(d=>(
                     <div className="dz" key={d.id}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                         <span style={{fontSize:18}}>{d.icon}</span>
@@ -278,25 +269,24 @@ function App() {
                         </div>
                       </div>
                       <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
-                        {d.waves.map((w: any,wi: any)=>(
+                        {d.waveBadges.map((wave: any, wi: number)=>(
                           <div key={wi} style={{fontSize:10,color:"#5a4030",background:"rgba(0,0,0,0.3)",border:"1px solid #2a1a08",borderRadius:3,padding:"2px 6px"}}>
-                            {w.monsters.map((k: any)=>(MONSTERS[k]?MONSTERS[k].icon:"?")).join("")} {w.label.replace("第","").replace("波","")}波
+                            {wave.enemies} {wave.label}
                           </div>
                         ))}
                         <div style={{fontSize:10,color:"#c84040",background:"rgba(100,0,0,0.2)",border:"1px solid #4a1010",borderRadius:3,padding:"2px 6px"}}>
-                          👑 {(MONSTERS[d.boss]?MONSTERS[d.boss].icon:"👑")}{(MONSTERS[d.boss]?MONSTERS[d.boss].name:"Boss")}
+                          👑 {d.bossIcon}{d.bossName}
                         </div>
                       </div>
                       <div className="dr">
-                        {DUNGEON_TIERS.map(t=>{
-                          const req=d.minLv+t.minLvOffset; const lk=player.level<req;
+                        {d.tierCards.map(({ isLocked, onStart, req, tier })=>{
                           return(
-                            <div key={t.id} className={`dc${lk?" lk":""}`} onClick={()=>!lk&&startBattle(d,t)}>
+                            <div key={tier.id} className={`dc${isLocked?" lk":""}`} onClick={onStart}>
                               <div className="di">{d.icon}</div>
-                              <div className="dtl" style={{color:t.color}}>{t.label}</div>
-                              <div className="dn" style={{fontSize:11,color:t.color}}>{d.name}</div>
-                              <div className="drq">Lv.{req}{lk?" 🔒":""}</div>
-                              <div className="drw">EXP×{t.expMult} 金×{t.goldMult}{t.lootBonus>0&&<span style={{color:"#d4b84a"}}> +{Math.round(t.lootBonus*100)}%</span>}</div>
+                              <div className="dtl" style={{color:tier.color}}>{tier.label}</div>
+                              <div className="dn" style={{fontSize:11,color:tier.color}}>{d.name}</div>
+                              <div className="drq">Lv.{req}{isLocked?" 🔒":""}</div>
+                              <div className="drw">EXP×{tier.expMult} 金×{tier.goldMult}{tier.lootBonus>0&&<span style={{color:"#d4b84a"}}> +{Math.round(tier.lootBonus*100)}%</span>}</div>
                             </div>
                           );
                         })}
@@ -323,22 +313,14 @@ function App() {
                       <div style={{marginBottom:10}}>
                         <div style={{fontSize:11,color:"#6a5030",marginBottom:6,fontFamily:"'Cinzel',serif"}}>選擇傭兵（點擊勾選）：</div>
                         <div className="mg" style={{gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))"}}>
-                          {mercScrollsInInv.map(scroll=>{
-                            const sel=selectedScrolls.includes(scroll.uid);
-                            const gr=getRarity(scroll.rarity);
+                          {mercSelectionCards.map(({ onToggle, rarity, scroll, selected, statusText, statusTextColor, style })=>{
                             return(
                               <div key={scroll.uid}
-                                style={{
-                                  background:`linear-gradient(160deg,${gr.color}12,#0e0a06)`,
-                                  border:`1px solid ${sel?gr.color:gr.color+"44"}`,
-                                  boxShadow:sel&&gr.glow?gr.glow:"none",
-                                  borderRadius:5,padding:"10px",textAlign:"center",
-                                  cursor:"pointer",transition:"all .2s",
-                                }}
-                                onClick={()=>toggleSelectedScroll(scroll.uid)}>
-                                <div style={{fontSize:22,filter:`drop-shadow(0 2px 6px ${gr.color}88)`}}>{scroll.icon}</div>
-                                <div style={{fontSize:9,color:gr.color,fontFamily:"'Cinzel',serif",borderColor:gr.color+"55",border:"1px solid",borderRadius:2,padding:"1px 4px",display:"inline-block",margin:"3px 0"}}>{gr.label}</div>
-                                <div style={{fontSize:11,color:gr.color,fontFamily:"'Cinzel',serif",letterSpacing:.3,textShadow:gr.glow?`0 0 8px ${gr.color}`:"none"}}>{scroll.name}</div>
+                                style={style}
+                                onClick={onToggle}>
+                                <div style={{fontSize:22,filter:`drop-shadow(0 2px 6px ${rarity.color}88)`}}>{scroll.icon}</div>
+                                <div style={{fontSize:9,color:rarity.color,fontFamily:"'Cinzel',serif",borderColor:rarity.color+"55",border:"1px solid",borderRadius:2,padding:"1px 4px",display:"inline-block",margin:"3px 0"}}>{rarity.label}</div>
+                                <div style={{fontSize:11,color:rarity.color,fontFamily:"'Cinzel',serif",letterSpacing:.3,textShadow:rarity.glow?`0 0 8px ${rarity.color}`:"none"}}>{scroll.name}</div>
                                 <div style={{fontSize:10,color:"#5a4020",marginTop:3,lineHeight:1.5}}>
                                   攻{scroll.attack} 防{scroll.defense} HP{scroll.hp}
                                   {scroll.heal>0&&<span style={{color:"#50c890"}}> 回{scroll.heal}</span>}
@@ -346,7 +328,7 @@ function App() {
                                 {scroll.affixes && scroll.affixes.length > 0 && <div style={{display:"flex",gap:2,justifyContent:"center",flexWrap:"wrap",marginTop:3}}>
                                   {scroll.affixes.map((a,i)=><span key={i} style={{fontSize:9,color:a.special?"#c870d0":"#6aaa6a",background:"rgba(0,0,0,0.4)",padding:"0 3px",borderRadius:2}}>{a.tag}</span>)}
                                 </div>}
-                                <div style={{fontSize:10,color:sel?gr.color:"#4a3020",marginTop:4,fontFamily:"'Cinzel',serif"}}>{sel?"✓ 已選":scroll.desc}</div>
+                                <div style={{fontSize:10,color:statusTextColor,marginTop:4,fontFamily:"'Cinzel',serif"}}>{statusText}</div>
                               </div>
                             );
                           })}
@@ -358,26 +340,23 @@ function App() {
                     )}
 
                     <div className="dr" style={{gridTemplateColumns:"repeat(auto-fill,minmax(165px,1fr))"}}>
-                      {MERC_DUNGEONS.map((d)=>{
-                        const lk=player.level<d.minLv;
-                        const tierColors=["#8a9070","#4caf50","#4a9fd4","#9c50d4","#e07020"];
-                        const tc=tierColors[MERC_DUNGEONS.indexOf(d)]||"#8a9070";
+                      {mercDungeonCards.map(({ dungeon, enemyGroups, isLocked, onStart, style, tierColor })=>{
                         return(
-                          <div key={d.id} className={`dc${lk?" lk":""}`} onClick={()=>!lk&&startMercBattle(d.id)}
-                            style={{borderColor:lk?"#2a1808":tc+"66",background:lk?"linear-gradient(135deg,#1a1208,#141008)":`linear-gradient(135deg,${tc}0a,#141008)`}}>
-                            <div className="di">{d.icon}</div>
-                            <div className="dtl" style={{color:tc}}>{d.label}</div>
-                            <div className="dn" style={{fontSize:11,color:tc}}>{d.lore.slice(0,20)}…</div>
+                          <div key={dungeon.id} className={`dc${isLocked?" lk":""}`} onClick={onStart}
+                            style={style}>
+                            <div className="di">{dungeon.icon}</div>
+                            <div className="dtl" style={{color:tierColor}}>{dungeon.label}</div>
+                            <div className="dn" style={{fontSize:11,color:tierColor}}>{dungeon.lore.slice(0,20)}…</div>
                             <div style={{fontSize:11,margin:"4px 0",letterSpacing:1}}>
-                              {d.waves.map((w: any,wi: any)=>(
-                                <span key={wi} style={{marginRight:3,opacity:0.7}}>
-                                  {w.enemies.map((k: any)=>(MONSTERS[k]?MONSTERS[k].icon:"👹")).join("")}
+                              {enemyGroups.map((wave: any)=> (
+                                <span key={wave.key} style={{marginRight:3,opacity:0.7}}>
+                                  {wave.enemies}
                                 </span>
                               ))}
-                              <span style={{color:"#c84040",marginLeft:2}}>{d.boss && d.boss.icon}Boss</span>
+                              <span style={{color:"#c84040",marginLeft:2}}>{dungeon.boss && dungeon.boss.icon}Boss</span>
                             </div>
-                            <div className="drq">Lv.{d.minLv}{lk?" 🔒":""}</div>
-                            <div className="drw">EXP×{d.reward.expMult} 金×{d.reward.goldMult}</div>
+                            <div className="drq">Lv.{dungeon.minLv}{isLocked?" 🔒":""}</div>
+                            <div className="drw">EXP×{dungeon.reward.expMult} 金×{dungeon.reward.goldMult}</div>
                           </div>
                         );
                       })}
@@ -536,32 +515,23 @@ function App() {
                 <div className="ba">
                   {replay ? (
                     <>
-                      <div className="btl">
-                        {replay.isArena
-                          ? `🏟 競技場 · ${(replay.opponent&&replay.opponent.name)||"對手"}`
-                          : replay.isExpedition
-                          ? `🗺 ${(replay.expedition&&replay.expedition.name)}`
-                          : replay.isMerc
-                            ? `🏴 ${MERC_DUNGEONS.find((d)=>d.id===replay.mercDungeonId)?.label||"傭兵副本"}`
-                          : replay.dungeon?`${replay.dungeon.icon} ${replay.dungeon.name}`:"⚔"}
-                        {!replay.isExpedition&&!replay.isMerc&&!replay.isArena&&` · ${(replay.tier&&replay.tier.label)}`}
-                      </div>
+                      <div className="btl">{replaySummary?.title}</div>
 
                       <div style={{marginBottom:12}}>
                         <div style={{fontSize:10,color:"#5a4020",fontFamily:"'Cinzel',serif",letterSpacing:1,marginBottom:4,textAlign:"center"}}>
-                          {replay.cursor<replay.lines.length?"戰鬥回放中...":"— 戰鬥結束 —"}
+                          {replaySummary?.statusText}
                         </div>
                         <div className="bt" style={{height:5}}>
                           <div className="bf" style={{
-                            width:`${Math.round(replay.cursor/replay.lines.length*100)}%`,
-                            background:replay.won?"linear-gradient(90deg,#1a5a1a,#40a040)":"linear-gradient(90deg,#5a1a1a,#a04040)"
+                            width:replaySummary?.progressWidth,
+                            background:replaySummary?.progressBackground
                           }}/>
                         </div>
                       </div>
 
                       <ReplayLog lines={replay.lines} cursor={replay.cursor}/>
 
-                      {replay.cursor >= replay.lines.length && (
+                      {replaySummary?.showBattleSummary && (
                         <div style={{marginTop:12}}>
                           <div style={{fontSize:10,color:"#5a4020",fontFamily:"'Cinzel',serif",letterSpacing:1,marginBottom:4,textAlign:"center"}}>
                             戰鬥摘要
@@ -578,7 +548,7 @@ function App() {
                         ):(
                           <>
                             <button className="btn btp" onClick={restartReplayBattle}>
-                              {replay.isArena?"🏟 返回競技場":"⚔ 再次出征"}
+                              {replaySummary?.actionLabel}
                             </button>
                             <button className="btn btm" onClick={closeReplay}>
                               ↩ 返回
@@ -603,8 +573,8 @@ function App() {
                   </div>
 
                   <div style={{display:"flex",gap:6,marginBottom:14,borderBottom:"1px solid #3a2a10",paddingBottom:8}}>
-                    {[["buy","🏪 購買"],["auction","🔨 競標"],["sell","💰 賣出"]].map(([id,lbl])=>(
-                      <button key={id} className={`btn${shopTab===id?" btp":" btm"}`} style={{fontSize:11,padding:"7px 14px"}} onClick={()=>setShopTab(id)}>{lbl}</button>
+                    {shopTabOptions.map(({ id, isActive, label, onSelect })=>(
+                      <button key={id} className={`btn${isActive?" btp":" btm"}`} style={{fontSize:11,padding:"7px 14px"}} onClick={onSelect}>{label}</button>
                     ))}
                   </div>
 
@@ -618,12 +588,11 @@ function App() {
                         </button>
                       </div>
                       <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
-                        {["all","weapon","offhand","armor","helmet","gloves","boots","ring","amulet"].map(f=>{
-                          const slotDef = EQUIP_SLOTS.find(s=>s.id===f);
+                        {shopFilterOptions.map((filter)=>{
                           return (
-                            <div key={f} className={`wcat-btn${shopFilter===f?" active":""}`} onClick={()=>setShopFilter(f)}
+                            <div key={filter.id} className={`wcat-btn${filter.isActive?" active":""}`} onClick={filter.onSelect}
                               style={{fontSize:10,padding:"3px 8px"}}>
-                              {f==="all"?"全部":(slotDef ? slotDef.label : f)}
+                              {filter.label}
                             </div>
                           );
                         })}
@@ -641,14 +610,12 @@ function App() {
                         ))}
                       </div>
                       <div className="sg">
-                        {filteredShop.map((item,idx)=>{
-                          const rar=getRarity(item.rarity);
-                          const cat=item.cat?WEAPON_CATEGORIES[item.cat]:null;
+                        {shopDisplayItems.map(({ cat, item, onBuy, rarity },idx)=>{
                           return(
-                            <div key={idx} className="si" style={{borderColor:rar.color+"55",background:`linear-gradient(160deg,${rar.color}08,#141008)`,boxShadow:rar.glow||"none"}}>
-                              <div className="sii" style={{filter:`drop-shadow(0 2px 5px ${rar.color}66)`}}>{item.icon}</div>
-                              <div className="rb" style={{color:rar.color,borderColor:rar.color+"55",background:`${rar.color}15`}}>{rar.label}</div>
-                              <div className="sin" style={{color:rar.color}}>{item.name}</div>
+                            <div key={idx} className="si" style={{borderColor:rarity.color+"55",background:`linear-gradient(160deg,${rarity.color}08,#141008)`,boxShadow:rarity.glow||"none"}}>
+                              <div className="sii" style={{filter:`drop-shadow(0 2px 5px ${rarity.color}66)`}}>{item.icon}</div>
+                              <div className="rb" style={{color:rarity.color,borderColor:rarity.color+"55",background:`${rarity.color}15`}}>{rarity.label}</div>
+                              <div className="sin" style={{color:rarity.color}}>{item.name}</div>
                               {cat&&<div className="sit">{cat.icon} {cat.label} · {cat.traitDesc}</div>}
                               <div className="sis">
                                 {item.attack>0&&<div style={{color:"#c8781e"}}>攻+{item.attack}</div>}
@@ -663,7 +630,7 @@ function App() {
                                 </div>)}
                               </div>}
                               <div className="sic">🪙 {item.cost}</div>
-                              <button className="btn btp" style={{width:"100%",fontSize:10}} onClick={()=>buyItem(item)} disabled={player.gold<item.cost}>購買</button>
+                              <button className="btn btp" style={{width:"100%",fontSize:10}} onClick={onBuy} disabled={player.gold<item.cost}>購買</button>
                             </div>
                           );
                         })}
@@ -739,20 +706,19 @@ function App() {
                         <button className="btn btm" style={{fontSize:10,padding:"6px 12px"}} onClick={sortInventory}>📂 整理背包</button>
                         <button className="btn btd" style={{fontSize:10,padding:"6px 12px"}} onClick={sellJunk}>🗑 賣掉所有普通品</button>
                       </div>
-                      {inventory.filter(i=>i.type!=="potion").length===0&&<div style={{color:"#4a3a20",fontStyle:"italic"}}>背包中沒有可出售的裝備</div>}
+                      {!hasSellableInventory&&<div style={{color:"#4a3a20",fontStyle:"italic"}}>背包中沒有可出售的裝備</div>}
                       <div className="ig">
-                        {inventory.filter(i=>i.type!=="potion").map(item=>{
-                          const rar=getRarity(item.rarity);
-                          const price=calcSellPrice(item);
+                        {sellListItems.map(({ item, onEquip, onSelect, onSell, price, rarity, selectLabel })=>{
                           if(item.type==="merc_scroll"){
                             return(
-                              <div key={item.uid} className="ii" style={{borderColor:rar.color+"55",background:`linear-gradient(160deg,${rar.color}08,#120e06)`}}>
+                              <div key={item.uid} className="ii" style={{borderColor:rarity.color+"55",background:`linear-gradient(160deg,${rarity.color}08,#120e06)`}}>
                                 <div style={{fontSize:20}}>📜</div>
-                                <div className="rb" style={{color:rar.color,borderColor:rar.color+"55",background:`${rar.color}15`}}>{rar.label}</div>
-                                <div className="iin" style={{color:rar.color}}>{item.name}</div>
+                                <div className="rb" style={{color:rarity.color,borderColor:rarity.color+"55",background:`${rarity.color}15`}}>{rarity.label}</div>
+                                <div className="iin" style={{color:rarity.color}}>{item.name}</div>
                                 <div className="iis">攻{item.attack} 防{item.defense} HP{item.hp}</div>
                                 <div style={{color:"#f0c040",fontSize:12,margin:"6px 0"}}>售價 🪙{price}</div>
-                                <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
+                                {onSelect&&<button className="btn btp" style={{width:"100%",fontSize:10,marginBottom:4}} onClick={onSelect}>{selectLabel}</button>}
+                                <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={onSell}>出售</button>
                               </div>
                             );
                           }
@@ -760,11 +726,11 @@ function App() {
                             <ItemCard
                               key={item.uid}
                               item={item}
-                              onEquip={()=>equipItem(item)}
+                              onEquip={onEquip}
                               footer={(
                                 <>
                                   <div style={{color:"#f0c040",fontSize:12,margin:"2px 0 0"}}>售價 🪙{price}</div>
-                                  <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
+                                  <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={onSell}>出售</button>
                                 </>
                               )}
                             />
@@ -785,32 +751,31 @@ function App() {
                     <button className="btn btd" style={{fontSize:10,padding:"5px 10px"}} onClick={sellJunk}>🗑 賣普通品</button>
                   </div>
                   <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
-                    {SLOT_FILTERS.map(f=>(
-                      <div key={f.id} className={`wcat-btn${invFilter===f.id?" active":""}`} onClick={()=>setInvFilter(f.id)}>{f.label}</div>
+                    {inventoryFilterOptions.map(f=>(
+                      <div key={f.id} className={`wcat-btn${f.isActive?" active":""}`} onClick={f.onSelect}>{f.label}</div>
                     ))}
                   </div>
                   {filteredInv.length===0&&<div style={{color:"#4a3a20",fontStyle:"italic"}}>（空）</div>}
                   <div className="ig">
-                    {filteredInv.map(item=>{
+                    {inventoryItems.map(({ item, onEquip, onSelectMerc, onSell, onUse, price, rarity, selectLabel })=>{
                       if(item.type==="potion") return(
                         <div key={item.uid} className="ii">
                           <div className="iii">{item.icon}</div>
                           <div className="iin">{item.name}</div>
                           <div className="iis" style={{color:"#50a860"}}>回復 {item.heal}HP</div>
-                          <div style={{color:"#f0c040",fontSize:11,marginBottom:4}}>售 🪙{calcSellPrice(item)}</div>
+                          <div style={{color:"#f0c040",fontSize:11,marginBottom:4}}>售 🪙{price}</div>
                           <div style={{display:"flex",gap:4}}>
-                            <button className="btn btm" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>useInventoryPotion(item.uid)}>使用</button>
-                            <button className="btn btd" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>sellItem(item.uid)}>賣出</button>
+                            <button className="btn btm" style={{flex:1,fontSize:9,padding:"5px"}} onClick={onUse}>使用</button>
+                            <button className="btn btd" style={{flex:1,fontSize:9,padding:"5px"}} onClick={onSell}>賣出</button>
                           </div>
                         </div>
                       );
                       if(item.type==="merc_scroll") {
-                        const gr=getRarity(item.rarity);
                         return(
-                          <div key={item.uid} className="ii" style={{borderColor:gr.color+"66",background:`linear-gradient(160deg,${gr.color}10,#120e06)`,boxShadow:gr.glow||"none"}}>
-                            <div style={{fontSize:22,filter:`drop-shadow(0 2px 6px ${gr.color}88)`}}>📜</div>
-                            <div className="rb" style={{color:gr.color,borderColor:gr.color+"55",background:`${gr.color}15`}}>{gr.label}</div>
-                            <div className="iin" style={{color:gr.color,textShadow:gr.glow?`0 0 8px ${gr.color}`:"none"}}>{item.name}</div>
+                          <div key={item.uid} className="ii" style={{borderColor:rarity.color+"66",background:`linear-gradient(160deg,${rarity.color}10,#120e06)`,boxShadow:rarity.glow||"none"}}>
+                            <div style={{fontSize:22,filter:`drop-shadow(0 2px 6px ${rarity.color}88)`}}>📜</div>
+                            <div className="rb" style={{color:rarity.color,borderColor:rarity.color+"55",background:`${rarity.color}15`}}>{rarity.label}</div>
+                            <div className="iin" style={{color:rarity.color,textShadow:rarity.glow?`0 0 8px ${rarity.color}`:"none"}}>{item.name}</div>
                             <div style={{fontSize:20,margin:"4px 0"}}>{item.icon}</div>
                             <div className="iis">
                               <div style={{color:"#c8781e"}}>攻擊 {item.attack}</div>
@@ -826,27 +791,25 @@ function App() {
                               ))}
                             </div>}
                             <div style={{fontSize:10,color:"#5a4828",fontStyle:"italic",margin:"4px 0"}}>{item.desc}</div>
-                             <div style={{color:"#f0c040",fontSize:11,marginBottom:4}}>售 🪙{calcSellPrice(item)}</div>
+                             <div style={{color:"#f0c040",fontSize:11,marginBottom:4}}>售 🪙{price}</div>
                              <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                               <button className="btn btp" style={{width:"100%",fontSize:10}} onClick={()=>selectMercScrollFromInventory(item.uid)}>
-                                 {selectedScrolls.includes(item.uid)?"✓ 已選（去副本）":"選入傭兵隊"}
+                               <button className="btn btp" style={{width:"100%",fontSize:10}} onClick={onSelectMerc}>
+                                 {selectLabel}
                                </button>
-                               <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
-                            </div>
+                               <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={onSell}>出售</button>
+                             </div>
                           </div>
                         );
                       }
-                      // Regular equipment
-                      const price=calcSellPrice(item);
                       return(
                         <ItemCard
                           key={item.uid}
                           item={item}
-                          onEquip={()=>equipItem(item)}
+                          onEquip={onEquip}
                           footer={(
                             <>
                               <div style={{color:"#f0c040",fontSize:11,margin:"1px 0 0"}}>售 🪙{price}</div>
-                              <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
+                              <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={onSell}>出售</button>
                             </>
                           )}
                         />
