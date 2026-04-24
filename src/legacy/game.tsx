@@ -7,6 +7,7 @@ import {
   INITIAL_PLAYER,
 } from "../game/constants";
 import { AffixLines } from "../components/AffixLines";
+import { BattleLog } from "../components/BattleLog";
 import { HpBar } from "../components/HpBar";
 import { ReplayLog } from "../components/ReplayLog";
 import { DUNGEON_TIERS } from "../game/data/dungeonTiers";
@@ -48,9 +49,6 @@ import {
   simulateMercRun,
   simulateRun,
 } from "../game/systems";
-import type {
-  RuntimeLogEntry,
-} from "../game/types";
 import type {
   AnyRecord,
   LegacyArenaOpponent,
@@ -121,27 +119,6 @@ function ItemCard({ item, onEquip, onUse }: { item: any; onEquip?: any; onUse?: 
         {onEquip&&<button className="btn btp" style={{width:"100%",fontSize:10}} onClick={onEquip}>裝備</button>}
         {onUse  &&<button className="btn btm" style={{width:"100%",fontSize:10}} onClick={onUse}>使用</button>}
       </div>
-    </div>
-  );
-}
-
-function BattleLog({ log }: { log: RuntimeLogEntry[] }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(()=>{ if(ref.current) ref.current.scrollTop=ref.current.scrollHeight; },[log]);
-  return (
-    <div className="blog" ref={ref}>
-      {log.map((line,i)=>{
-        const txt=typeof line==="string"?line:line.txt;
-        return (
-          <div key={i} className={
-            txt.includes("你攻擊")||txt.includes("爆擊")?"lh":
-            txt.includes("🗡")?"lm":
-            txt.includes("攻擊了")&&!txt.includes("你攻擊")?"le":
-            (txt.includes("擊敗")||txt.includes("等級"))?"lw":
-            (txt.includes("被擊敗")||txt.includes("陣亡"))?"ll":""
-          }>{txt}</div>
-        );
-      })}
     </div>
   );
 }
