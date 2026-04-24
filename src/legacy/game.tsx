@@ -873,10 +873,7 @@ function App() {
               <div className="ph">角色</div>
               <div className="pb">
                 <div className="pname">{player.name}</div>
-                <div className="bw">
-                  <div className="bl"><span>生命</span><span>{player.hp}/{tMhp}</span></div>
-                  <div className="bt"><div className="bf hf" style={{width:`${hpPct}%`}}/></div>
-                </div>
+                <HpBar cur={player.hp} max={tMhp} />
                 <div className="bw">
                   <div className="bl"><span>Lv.{player.level}</span><span>{player.exp}/{player.expNeeded}</span></div>
                   <div className="bt"><div className="bf ef" style={{width:`${expPct}%`}}/></div>
@@ -1342,7 +1339,11 @@ function App() {
                         </div>
                       </div>
 
-                      <ReplayLog lines={replay.lines} cursor={replay.cursor}/>
+                      {replay.cursor < replay.lines.length ? (
+                        <ReplayLog lines={replay.lines} cursor={replay.cursor}/>
+                      ) : (
+                        <BattleLog log={replay.lines}/>
+                      )}
 
                       <div className="bact" style={{marginTop:12}}>
                         {replay.cursor<replay.lines.length?(
