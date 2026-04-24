@@ -1,4 +1,7 @@
-import { ItemCard } from "../../components/ItemCard";
+import { WEAPON_CATEGORIES } from "../../game/data/weaponCategories";
+import { getRarity } from "../../game/systems";
+
+import { AffixLines } from "../../components/AffixLines";
 
 type GameState = ReturnType<typeof import("../../game/useGameState").useGameState>;
 
@@ -91,18 +94,28 @@ export function InventoryTab({
             );
           }
 
+          const rarityInfo = getRarity(item.rarity);
+
           return (
-            <ItemCard
-              key={item.uid}
-              item={item}
-              onEquip={onEquip}
-              footer={(
-                <>
-                  <div style={{ color: "#f0c040", fontSize: 11, margin: "1px 0 0" }}>售 🪙{price}</div>
-                  <button className="btn btd" style={{ width: "100%", fontSize: 10 }} onClick={onSell}>出售</button>
-                </>
-              )}
-            />
+            <div key={item.uid} className="ii" style={{ borderColor: rarityInfo.color + (rarityInfo.id === "normal" ? "33" : "77"), background: rarityInfo.id === "normal" ? "linear-gradient(160deg,#1a1208,#120e06)" : `linear-gradient(160deg,${rarityInfo.color}0a,#120e06)`, boxShadow: rarityInfo.glow || "none" }}>
+              <div className="iii" style={{ filter: `drop-shadow(0 2px 4px ${rarityInfo.color}66)` }}>{item.icon}</div>
+              {rarityInfo.id !== "normal" && <div className="rb" style={{ color: rarityInfo.color, borderColor: rarityInfo.color + "55", background: `${rarityInfo.color}15` }}>{rarityInfo.label}</div>}
+              <div className="iin" style={{ color: rarityInfo.color }}>{item.name}</div>
+              {item.itemLevel > 0 && <div style={{ fontSize: 9, color: "#5a4020", marginBottom: 2 }}>Lv.{item.itemLevel}</div>}
+              <div className="iis">
+                {item.attack > 0 && <div style={{ color: item.attack > 50 ? "#f5c040" : item.attack > 25 ? "#c8781e" : "#5a4020" }}>攻+{item.attack}</div>}
+                {item.defense > 0 && <div style={{ color: item.defense > 40 ? "#80c0f0" : item.defense > 20 ? "#4a9fd4" : "#5a4020" }}>防+{item.defense}</div>}
+                {item.hp > 0 && <div style={{ color: item.hp > 80 ? "#f06060" : item.hp > 40 ? "#c84040" : "#5a4020" }}>HP+{item.hp}</div>}
+                {item.speed > 0 && <div style={{ color: "#5a9050" }}>速+{item.speed}</div>}
+              </div>
+              {item.cat && <div style={{ fontSize: 10, color: "#d08030", marginBottom: 3 }}>{item.cat && WEAPON_CATEGORIES[item.cat] ? WEAPON_CATEGORIES[item.cat].icon : ""}{item.cat && WEAPON_CATEGORIES[item.cat] ? WEAPON_CATEGORIES[item.cat].label : ""} · {item.cat && WEAPON_CATEGORIES[item.cat] ? WEAPON_CATEGORIES[item.cat].traitDesc : ""}</div>}
+              <AffixLines affixes={item.affixes} />
+              <div style={{ color: "#f0c040", fontSize: 11, margin: "5px 0" }}>售 🪙{price}</div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button className="btn btp" style={{ flex: 1, fontSize: 9, padding: "5px" }} onClick={onEquip}>裝備</button>
+                <button className="btn btd" style={{ flex: 1, fontSize: 9, padding: "5px" }} onClick={onSell}>出售</button>
+              </div>
+            </div>
           );
         })}
       </div>
