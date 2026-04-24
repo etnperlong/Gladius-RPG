@@ -2,12 +2,12 @@ import { useState } from "react";
 
 import { QUEST_DEFS } from "../../game/data/quests";
 import { getQuestProgress, isQuestDone } from "../../game/systems";
-import type { LegacyItem, LegacyPlayer, LegacyQuestState } from "../../legacy/types";
+import type { GameItem, GamePlayer, GameQuestState } from "../../game/appTypes";
 
 export function QuestTab({ player, inventory, questState, onCollect }: {
-  player: LegacyPlayer;
-  inventory: LegacyItem[];
-  questState: LegacyQuestState;
+  player: GamePlayer;
+  inventory: GameItem[];
+  questState: GameQuestState;
   onCollect: (questId: string) => void;
 }) {
   const [catTab, setCatTab] = useState("daily");

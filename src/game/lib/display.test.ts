@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TRAIN_STAT_DISPLAY_KEYS } from "../game/lib/display";
+import { TRAIN_STAT_DISPLAY_KEYS } from "./display";
 
 describe("train stat display mapping", () => {
   it("uses concrete player stat keys instead of derived abbreviations", () => {

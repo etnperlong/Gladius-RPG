@@ -4,12 +4,12 @@ import type {
   RuntimePlayer,
   RuntimeQuestState,
   RuntimeReplay,
-} from "../game/types";
+} from "./types";
 
 export type AnyRecord = Record<string, any>;
 export type AnyList = any[];
 
-export type LegacyItem = RuntimeItem & AnyRecord & {
+export type GameItem = RuntimeItem & AnyRecord & {
   uid: any;
   name: any;
   icon: any;
@@ -29,7 +29,7 @@ export type LegacyItem = RuntimeItem & AnyRecord & {
   specials: any[];
 };
 
-export type LegacyPlayer = RuntimePlayer & AnyRecord & {
+export type GamePlayer = RuntimePlayer & AnyRecord & {
   level: any;
   exp: any;
   expNeeded: any;
@@ -42,9 +42,9 @@ export type LegacyPlayer = RuntimePlayer & AnyRecord & {
   equipment: AnyRecord;
 };
 
-export type LegacyQuestState = RuntimeQuestState & AnyRecord;
+export type GameQuestState = RuntimeQuestState & AnyRecord;
 
-export type LegacyArenaOpponent = Omit<RuntimeArenaOpponent, "equipment"> & AnyRecord & {
+export type GameArenaOpponent = Omit<RuntimeArenaOpponent, "equipment"> & AnyRecord & {
   equipment: AnyRecord;
   attack: any;
   defense: any;
@@ -53,10 +53,10 @@ export type LegacyArenaOpponent = Omit<RuntimeArenaOpponent, "equipment"> & AnyR
   goldCarried: any;
 };
 
-export type LegacyReplay = Omit<RuntimeReplay, "drops" | "dungeon" | "tier" | "expedition" | "opponent"> & AnyRecord & {
+export type GameReplay = Omit<RuntimeReplay, "drops" | "dungeon" | "tier" | "expedition" | "opponent"> & AnyRecord & {
   lines: any[];
   cursor: any;
-  drops: LegacyItem[];
+  drops: GameItem[];
   won?: any;
   dungeon?: any;
   tier?: any;
@@ -64,4 +64,4 @@ export type LegacyReplay = Omit<RuntimeReplay, "drops" | "dungeon" | "tier" | "e
   opponent?: any;
 };
 
-export type LootDrop = LegacyItem & { _remaining?: LegacyItem[] };
+export type LootDrop = GameItem & { _remaining?: GameItem[] };

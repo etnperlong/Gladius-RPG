@@ -1,6 +1,6 @@
 import { BattleLog } from "../../components/BattleLog";
 import { ReplayLog } from "../../components/ReplayLog";
-import type { LegacyReplay } from "../../legacy/types";
+import type { GameReplay } from "../../game/appTypes";
 
 type ReplaySummary = {
   actionLabel: string;
@@ -18,7 +18,7 @@ export function BattleReport({
   onRestart,
   onSkip,
 }: {
-  replay: LegacyReplay | null;
+  replay: GameReplay | null;
   replaySummary: ReplaySummary | null;
   onClose: () => void;
   onRestart: () => void;

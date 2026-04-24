@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 
 import { getRarity } from "../../game/systems";
-import type { LegacyArenaOpponent, LegacyPlayer } from "../../legacy/types";
+import type { GameArenaOpponent, GamePlayer } from "../../game/appTypes";
 
 export function ArenaTab({ player, arenaOpponents, arenaInjuredUntil, arenaRefreshes, onRefresh, onFight, onInit }: {
-  player: LegacyPlayer;
-  arenaOpponents: LegacyArenaOpponent[];
+  player: GamePlayer;
+  arenaOpponents: GameArenaOpponent[];
   arenaInjuredUntil: number;
   arenaRefreshes: number;
   onRefresh: (free: boolean) => void;
-  onFight: (opponent: LegacyArenaOpponent) => void;
+  onFight: (opponent: GameArenaOpponent) => void;
   onInit: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
