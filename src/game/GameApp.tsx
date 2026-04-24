@@ -1,4 +1,4 @@
-import "../legacy/game.css";
+import "./game.css";
 
 import { HpBar } from "../components/HpBar";
 import { ItemCard } from "../components/ItemCard";

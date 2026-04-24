@@ -42,21 +42,21 @@ import {
 } from "./systems";
 import type {
   AnyRecord,
-  LegacyArenaOpponent,
-  LegacyItem,
-  LegacyPlayer,
-  LegacyQuestState,
-  LegacyReplay,
+  GameArenaOpponent,
+  GameItem,
+  GamePlayer,
+  GameQuestState,
+  GameReplay,
   LootDrop,
-} from "../legacy/types";
+} from "./appTypes";
 
 export function useGameState() {
-  const [player, setPlayer] = useState<LegacyPlayer>(() => loadGameState().player as LegacyPlayer);
+  const [player, setPlayer] = useState<GamePlayer>(() => loadGameState().player as GamePlayer);
 
-  const [inventory, setInventory] = useState<LegacyItem[]>(() => loadGameState().inventory as LegacyItem[]);
+  const [inventory, setInventory] = useState<GameItem[]>(() => loadGameState().inventory as GameItem[]);
 
   const [tab, setTab] = useState("dungeon");
-  const [replay, setReplay] = useState<LegacyReplay | null>(null);
+  const [replay, setReplay] = useState<GameReplay | null>(null);
   const replayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [lootDrop, setLootDrop] = useState<LootDrop | null>(null);
   const [selectedScrolls, setSelectedScrolls] = useState<any[]>([]);
@@ -74,11 +74,11 @@ export function useGameState() {
   const [enhanceTarget, setEnhanceTarget] = useState<any>(null);
   const [enhanceLog, setEnhanceLog] = useState<string[]>([]);
   const [enhanceAnim, setEnhanceAnim] = useState<string | null>(null);
-  const [arenaOpponents, setArenaOpponents] = useState<LegacyArenaOpponent[]>([]);
+  const [arenaOpponents, setArenaOpponents] = useState<GameArenaOpponent[]>([]);
   const [arenaInjuredUntil, setArenaInjuredUntil] = useState(0);
   const [arenaRefreshes, setArenaRefreshes] = useState(5);
   const [arenaLastDate, setArenaLastDate] = useState("");
-  const [questState, setQuestState] = useState<LegacyQuestState>(() => initQuestState());
+  const [questState, setQuestState] = useState<GameQuestState>(() => initQuestState());
   const [questNotify, setQuestNotify] = useState<string | null>(null);
 
   const save = useCallback(() => {
@@ -223,13 +223,13 @@ export function useGameState() {
     setReplay({
       lines: result.log,
       cursor: 0,
-      drops: result.drops as LegacyItem[],
+      drops: result.drops as GameItem[],
       dungeon,
       tier,
       won: result.won,
       pending: false,
       isExpedition: false,
-    } as LegacyReplay);
+    } as GameReplay);
     setTab("battle");
     updateQuestProgress(fp, inventory);
   };
@@ -245,11 +245,11 @@ export function useGameState() {
     setReplay({
       lines: result.log,
       cursor: 0,
-      drops: result.drops as LegacyItem[],
+      drops: result.drops as GameItem[],
       won: result.won,
       expedition,
       isExpedition: true,
-    } as LegacyReplay);
+    } as GameReplay);
     setTab("battle");
     updateQuestProgress(fp, inventory);
   };
@@ -372,11 +372,11 @@ export function useGameState() {
     setReplay({
       lines: result.log,
       cursor: 0,
-      drops: result.drops as LegacyItem[],
+      drops: result.drops as GameItem[],
       won: result.won,
       isMerc: true,
       mercDungeonId: dungeonId,
-    } as LegacyReplay);
+    } as GameReplay);
     setTab("battle");
     updateQuestProgress(fp, inventory);
   };
@@ -578,7 +578,7 @@ export function useGameState() {
       setArenaLastDate(today);
       setArenaRefreshes(5);
     }
-    setArenaOpponents(Array.from({ length: 4 }, () => genArenaOpponent(player.level)) as LegacyArenaOpponent[]);
+    setArenaOpponents(Array.from({ length: 4 }, () => genArenaOpponent(player.level)) as GameArenaOpponent[]);
   };
 
   const collectQuest = (questId: any) => {
@@ -631,7 +631,7 @@ export function useGameState() {
       }
       setPlayer((p) => ({ ...p, gold: p.gold - cost }));
     }
-    setArenaOpponents(Array.from({ length: 4 }, () => genArenaOpponent(player.level)) as LegacyArenaOpponent[]);
+    setArenaOpponents(Array.from({ length: 4 }, () => genArenaOpponent(player.level)) as GameArenaOpponent[]);
   };
 
   const startArenaBattle = (opponent: any) => {
@@ -651,7 +651,7 @@ export function useGameState() {
     }
     np.highestLevel = Math.max(np.highestLevel || 1, np.level);
     setPlayer(np);
-    setReplay({ lines: result.log, cursor: 0, drops: [], won: result.won, isArena: true, opponent } as LegacyReplay);
+    setReplay({ lines: result.log, cursor: 0, drops: [], won: result.won, isArena: true, opponent } as GameReplay);
     setTab("battle");
     updateQuestProgress(np, inventory);
   };
