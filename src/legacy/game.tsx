@@ -1490,22 +1490,17 @@ function App() {
                             );
                           }
                           return(
-                            <div key={item.uid} className="ii" style={{borderColor:rar.color+"55",background:`linear-gradient(160deg,${rar.color}08,#120e06)`}}>
-                              <div className="iii">{item.icon}</div>
-                              {rar.id!=="normal"&&<div className="rb" style={{color:rar.color,borderColor:rar.color+"55",background:`${rar.color}15`}}>{rar.label}</div>}
-                              <div className="iin" style={{color:rar.color}}>{item.name}</div>
-                              <div className="iis">
-                                {item.attack>0&&<div>攻+{item.attack}</div>}
-                                {item.defense>0&&<div>防+{item.defense}</div>}
-                                {item.hp>0&&<div>HP+{item.hp}</div>}
-                              </div>
-                              <AffixLines affixes={item.affixes}/>
-                              <div style={{color:"#f0c040",fontSize:12,margin:"6px 0"}}>售價 🪙{price}</div>
-                              <div style={{display:"flex",gap:4}}>
-                                <button className="btn btp" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>equipItem(item)}>裝備</button>
-                                <button className="btn btd" style={{flex:1,fontSize:9,padding:"5px"}} onClick={()=>sellItem(item.uid)}>出售</button>
-                              </div>
-                            </div>
+                            <ItemCard
+                              key={item.uid}
+                              item={item}
+                              onEquip={()=>equipItem(item)}
+                              footer={(
+                                <>
+                                  <div style={{color:"#f0c040",fontSize:12,margin:"2px 0 0"}}>售價 🪙{price}</div>
+                                  <button className="btn btd" style={{width:"100%",fontSize:10}} onClick={()=>sellItem(item.uid)}>出售</button>
+                                </>
+                              )}
+                            />
                           );
                         })}
                       </div>
