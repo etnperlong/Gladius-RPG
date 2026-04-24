@@ -94,6 +94,8 @@ export function useGameState() {
   const tSpd = cSpd(player);
   const pSpec = gSpec(player);
   const wCat = getWeaponCat(player);
+  const renderedQuestState = checkQuestReset(questState, player);
+  const questBadgeCount = Object.keys(QUEST_DEFS).filter((qid) => isQuestDone(qid, { ...player, _inv: inventory }, renderedQuestState)).length;
 
   function lvUp(np: any, expG: any, goldG: any, log: any) {
     const withGold = { ...np, gold: (np.gold || 0) + goldG };
@@ -161,6 +163,11 @@ export function useGameState() {
     } as LegacyReplay);
     setTab("battle");
     updateQuestProgress(fp, inventory);
+  };
+
+  const handleTabSelect = (nextTab: string) => {
+    setTab(nextTab);
+    if (nextTab === "arena" && arenaOpponents.length === 0) initArena();
   };
 
   useEffect(() => {
@@ -242,6 +249,20 @@ export function useGameState() {
     updateQuestProgress(fp, inventory);
   };
 
+  const addFreeMercScroll = () => {
+    const s = genMercScroll(player.level);
+    setInventory((inv) => [...inv, s]);
+  };
+
+  const toggleSelectedScroll = (uid: any) => {
+    setSelectedScrolls((prev) => (prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]));
+  };
+
+  const selectMercScrollFromInventory = (uid: any) => {
+    toggleSelectedScroll(uid);
+    setTab("dungeon");
+  };
+
   const usePotion = () => {
     const idx = inventory.findIndex((i) => i.type === "potion");
     if (idx === -1) return;
@@ -250,6 +271,13 @@ export function useGameState() {
     ni.splice(idx, 1);
     setPlayer((pl) => ({ ...pl, hp: Math.min(pl.hp + (p.heal || 0), cMhp(pl)) }));
     setInventory(ni);
+  };
+
+  const useInventoryPotion = (uid: any) => {
+    const item = inventory.find((i) => i.uid === uid);
+    if (!item) return;
+    setPlayer((p) => ({ ...p, hp: Math.min(p.hp + item.heal, cMhp(p)) }));
+    setInventory((inv) => inv.filter((i) => i.uid !== uid));
   };
 
   const buyItem = (item: any) => {
@@ -515,6 +543,15 @@ export function useGameState() {
     );
   };
 
+  const updateBidInputValue = (auctionId: any, value: string) => {
+    setBidInput((b) => ({ ...b, [auctionId]: parseInt(value) || "" }));
+  };
+
+  const submitBid = (auctionId: any, amount: any) => {
+    placeBid(auctionId, amount);
+    setBidInput((b) => ({ ...b, [auctionId]: "" }));
+  };
+
   const claimAuction = (auctionId: any) => {
     const it = auctionItems.find((a) => a.auctionId === auctionId);
     if (!it || !it.myBid) return;
@@ -539,6 +576,36 @@ export function useGameState() {
     if (!item) return;
     setInventory((inv) => [...inv, { ...item, uid: Date.now() }]);
     setPlayer((p) => ({ ...p, equipment: { ...p.equipment, [slot]: null } }));
+  };
+
+  const skipReplay = () => {
+    setReplay((r) => (r ? { ...r, cursor: r.lines.length } : null));
+  };
+
+  const restartReplayBattle = () => {
+    if (!replay) return;
+    if (replay.isArena) {
+      setTab("arena");
+      return;
+    }
+    if (replay.isExpedition) {
+      startExpedition(replay.expedition);
+      return;
+    }
+    if (replay.isMerc) {
+      startMercBattle(replay.mercDungeonId);
+      return;
+    }
+    startBattle(replay.dungeon, replay.tier);
+  };
+
+  const closeReplay = () => {
+    setReplay(null);
+    setTab("dungeon");
+  };
+
+  const openBattleReport = () => {
+    setTab("battle");
   };
 
   const SLOT_FILTERS = [
@@ -573,6 +640,7 @@ export function useGameState() {
     discardLoot,
     doEnhance,
     doTrain,
+    addFreeMercScroll,
     enhanceAnim,
     enhanceLog,
     enhanceTarget,
@@ -581,25 +649,32 @@ export function useGameState() {
     expPct,
     filteredInv,
     filteredShop,
+    closeReplay,
+    handleTabSelect,
     initArena,
     invFilter,
     inventory,
     lootDrop,
     mercScrollsInInv,
+    openBattleReport,
     pSpec,
     placeBid,
     player,
     potions,
+    questBadgeCount,
     questNotify,
     questState,
+    renderedQuestState,
     refreshAuction,
     refreshShop,
     replay,
     reset,
+    restartReplayBattle,
     save,
     saveMsg,
     selectedScrollObjs,
     selectedScrolls,
+    selectMercScrollFromInventory,
     sellItem,
     sellJunk,
     setBidInput,
@@ -618,6 +693,7 @@ export function useGameState() {
     shopTab,
     SLOT_FILTERS,
     sortInventory,
+    skipReplay,
     startArenaBattle,
     startBattle,
     startExpedition,
@@ -630,7 +706,11 @@ export function useGameState() {
     takeLoot,
     unequip,
     updateQuestProgress,
+    updateBidInputValue,
     usePotion,
+    useInventoryPotion,
+    submitBid,
+    toggleSelectedScroll,
     wCat,
   };
 }
