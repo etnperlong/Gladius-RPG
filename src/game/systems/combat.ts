@@ -2,6 +2,7 @@ import { MERC_DUNGEONS } from "../data/mercenaries";
 import { MONSTERS } from "../data/monsters";
 import { WEAPON_CATEGORIES } from "../data/weaponCategories";
 import { applyEnhanceBonus } from "../lib/items";
+import type { KillRecord } from "../types/combat";
 
 type AnyRecord = Record<string, any>;
 
@@ -11,6 +12,21 @@ type CombatDeps = {
   genMercScroll: (playerLevel: any, forceGrade?: any) => any;
   mercDungeons?: any[];
 };
+
+function recordKill(kills: KillRecord[], enemyId: string, enemyName: string, enemyCategory?: string) {
+  const existing = kills.find((entry) => entry.enemyId === enemyId);
+  if (existing) {
+    existing.count += 1;
+    return;
+  }
+
+  kills.push({
+    enemyId,
+    enemyName,
+    enemyCategory,
+    count: 1,
+  });
+}
 
 export const sumEq = (player: any, stat: any) =>
   Object.values(player.equipment).reduce((sum, entry) => {
@@ -439,6 +455,7 @@ export function simulateExpedition(expedition: any, initPlayer: any, deps: Comba
   const wc = getWeaponCat(np);
   const log: any[] = [];
   const drops: any[] = [];
+  const kills: KillRecord[] = [];
   const bleedRef = { val: 0 };
 
   log.push({ txt: `🗺 探險：${expedition.name}`, type: "title" });
@@ -455,6 +472,7 @@ export function simulateExpedition(expedition: any, initPlayer: any, deps: Comba
   const result = fightMonster(enemy, np, pAtk, pDef, pMhp, specials, wc, log, bleedRef);
   np = result.np;
   if (result.won) {
+    recordKill(kills, enemy.key || expedition.monster || enemy.name, enemy.name);
     const expGain = Math.floor(enemy.expReward * expedition.expMult);
     const goldGain = Math.floor(enemy.goldReward * expedition.goldMult);
     np = lvUp(np, expGain, goldGain, log);
@@ -477,7 +495,7 @@ export function simulateExpedition(expedition: any, initPlayer: any, deps: Comba
 
   log.push({ txt: "─────────────────", type: "sep" });
   log.push({ txt: `📊 ${result.won ? "勝利" : "落敗"} · 造成${result.totalDmgDealt} · 承受${result.totalDmgTaken}`, type: result.won ? "win" : "lose" });
-  return { log, finalPlayer: np, drops, won: result.won };
+  return { log, finalPlayer: np, drops, kills, won: result.won };
 }
 
 export function simulateRun(dungeon: any, tier: any, initPlayer: any, deps: CombatDeps) {
@@ -490,6 +508,7 @@ export function simulateRun(dungeon: any, tier: any, initPlayer: any, deps: Comb
   const wc = getWeaponCat(np);
   const log: any[] = [];
   const drops: any[] = [];
+  const kills: KillRecord[] = [];
   const bleedRef = { val: 0 };
   let totalKills = 0;
   let totalDmgDealt = 0;
@@ -519,6 +538,7 @@ export function simulateRun(dungeon: any, tier: any, initPlayer: any, deps: Comb
       totalDmgTaken += result.totalDmgTaken;
       totalCrits += result.crits;
       if (result.won) {
+        recordKill(kills, monsterKey, enemy.name);
         totalKills += 1;
         const expGain = Math.floor(enemy.expReward * tier.expMult);
         const goldGain = Math.floor(enemy.goldReward * tier.goldMult);
@@ -551,6 +571,7 @@ export function simulateRun(dungeon: any, tier: any, initPlayer: any, deps: Comb
     totalDmgTaken += result.totalDmgTaken;
     totalCrits += result.crits;
     if (result.won) {
+      recordKill(kills, dungeon.boss || boss.key || boss.name, boss.name, "boss");
       totalKills += 1;
       const expGain = Math.floor(boss.expReward * tier.expMult);
       const goldGain = Math.floor(boss.goldReward * tier.goldMult);
@@ -581,7 +602,7 @@ export function simulateRun(dungeon: any, tier: any, initPlayer: any, deps: Comb
   log.push({ txt: "📊 戰鬥結算", type: "title" });
   log.push({ txt: `${won ? "🏆 副本完成！" : "💀 副本失敗"} · 擊殺${totalKills}/${totalMonsters}`, type: won ? "win" : "lose" });
   log.push({ txt: `⚔ 造成${totalDmgDealt} · 承受${totalDmgTaken} · 爆擊${totalCrits}次 · 掉落${drops.length}件`, type: "info" });
-  return { log, finalPlayer: np, drops, won };
+  return { log, finalPlayer: np, drops, kills, won };
 }
 
 export function simulateMercRun(dungeonId: any, initPlayer: any, mercs: any, deps: CombatDeps) {
@@ -596,6 +617,7 @@ export function simulateMercRun(dungeonId: any, initPlayer: any, mercs: any, dep
   const nm = mercs.map((merc: any) => ({ ...merc, curHp: merc.hp, alive: true }));
   const log: any[] = [];
   const drops: any[] = [];
+  const kills: KillRecord[] = [];
   const bleedRef = { val: 0 };
   let totalDmgDealt = 0;
   let totalDmgTaken = 0;
@@ -651,6 +673,7 @@ export function simulateMercRun(dungeonId: any, initPlayer: any, mercs: any, dep
       totalDmgTaken += result.totalDmgTaken;
 
       if (np.hp > 0 && enemy.hp <= 0) {
+        recordKill(kills, monsterData ? monsterKey : enemy.name, enemy.name);
         const expGain = Math.floor(enemy.expReward * ((dungeon.reward && dungeon.reward.expMult) || 1.2));
         const goldGain = Math.floor(enemy.goldReward * ((dungeon.reward && dungeon.reward.goldMult) || 1.5));
         np = lvUp(np, expGain, goldGain, log);
@@ -690,6 +713,7 @@ export function simulateMercRun(dungeonId: any, initPlayer: any, mercs: any, dep
     np = result.np;
     totalDmgDealt += result.totalDmgDealt;
     if (result.won) {
+      recordKill(kills, bossData.name, bossData.name, "boss");
       np = lvUp(np, bossEnemy.expReward, bossEnemy.goldReward, log);
       log.push({ txt: `👑 擊敗首領${bossData.name}！+${bossEnemy.expReward}EXP`, type: "win" });
       const scrollBonus = (dungeon.reward && dungeon.reward.scrollBonus) || 0.3;
@@ -715,7 +739,7 @@ export function simulateMercRun(dungeonId: any, initPlayer: any, mercs: any, dep
   }
   log.push({ txt: "─────────────────", type: "sep" });
   log.push({ txt: `📊 ${won ? "勝利" : "落敗"} · 造成${totalDmgDealt} · 承受${totalDmgTaken} · 掉落${drops.length}件`, type: won ? "win" : "lose" });
-  return { log, finalPlayer: np, drops, won };
+  return { log, finalPlayer: np, drops, kills, won };
 }
 
 export function runCombat(player: any, enemy: any) {

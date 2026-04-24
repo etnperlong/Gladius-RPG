@@ -1,4 +1,5 @@
 import { ItemCard } from "../../components/ItemCard";
+import { SellThresholdControl } from "./SellThresholdControl";
 
 type GameState = ReturnType<typeof import("../../game/useGameState").useGameState>;
 
@@ -16,6 +17,8 @@ type ShopTabProps = {
   auctionDisplayItems: GameState["auctionDisplayItems"];
   hasSellableInventory: GameState["hasSellableInventory"];
   sellListItems: GameState["sellListItems"];
+  sellThreshold: GameState["sellThreshold"];
+  onSellThresholdChange: GameState["setSellThreshold"];
   sortInventory: GameState["sortInventory"];
   sellJunk: GameState["sellJunk"];
 };
@@ -34,6 +37,8 @@ export function ShopTab({
   auctionDisplayItems,
   hasSellableInventory,
   sellListItems,
+  sellThreshold,
+  onSellThresholdChange,
   sortInventory,
   sellJunk,
 }: ShopTabProps) {
@@ -172,7 +177,11 @@ export function ShopTab({
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ fontSize: 12, color: "#6a5030", flex: 1 }}>出售背包中的裝備，回收金幣</div>
             <button className="btn btm" style={{ fontSize: 10, padding: "6px 12px" }} onClick={sortInventory}>📂 整理背包</button>
-            <button className="btn btd" style={{ fontSize: 10, padding: "6px 12px" }} onClick={sellJunk}>🗑 賣掉所有普通品</button>
+            <SellThresholdControl
+              value={sellThreshold}
+              onChange={onSellThresholdChange}
+              onSell={() => sellJunk(sellThreshold)}
+            />
           </div>
           {!hasSellableInventory && <div style={{ color: "#4a3a20", fontStyle: "italic" }}>背包中沒有可出售的裝備</div>}
           <div className="ig">

@@ -18,6 +18,7 @@ import { TRAIN_STAT_DISPLAY_KEYS } from "./lib/display";
 import { applyEnhanceBonus, calcSellPrice, enhanceCost } from "./lib/items";
 import { trainCost } from "./lib/training";
 import { clearGameState, loadGameState, saveGameState } from "./persistence";
+import { getBulkSellResult } from "./systems/economy";
 import {
   applyProgressionRewards,
   cAtk,
@@ -40,6 +41,14 @@ import {
   simulateMercRun,
   simulateRun,
 } from "./systems";
+import {
+  abandonTavernQuest,
+  acceptTavernQuest,
+  claimTavernQuestReward,
+  createInitialTavernQuestState,
+  dismissStoryReward,
+  refreshTavernBoard,
+} from "./systems/tavernQuests";
 import type {
   AnyRecord,
   GameArenaOpponent,
@@ -50,10 +59,13 @@ import type {
   LootDrop,
 } from "./appTypes";
 
-export function useGameState() {
-  const [player, setPlayer] = useState<GamePlayer>(() => loadGameState().player as GamePlayer);
+type SellThreshold = "normal" | "magic" | "rare" | "legendary" | "mythic";
 
-  const [inventory, setInventory] = useState<GameItem[]>(() => loadGameState().inventory as GameItem[]);
+export function useGameState() {
+  const initialSave = loadGameState();
+  const [player, setPlayer] = useState<GamePlayer>(() => initialSave.player as GamePlayer);
+
+  const [inventory, setInventory] = useState<GameItem[]>(() => initialSave.inventory as GameItem[]);
 
   const [tab, setTab] = useState("dungeon");
   const [replay, setReplay] = useState<GameReplay | null>(null);
@@ -63,6 +75,7 @@ export function useGameState() {
   const [saveMsg, setSaveMsg] = useState("");
   const [shopFilter, setShopFilter] = useState("all");
   const [invFilter, setInvFilter] = useState("all");
+  const [sellThreshold, setSellThreshold] = useState<SellThreshold>("normal");
   const [shopItems, setShopItems] = useState<any[]>(() =>
     Array.from({ length: 8 }, (_, i) =>
       genShopItem(1, ["weapon", "offhand", "armor", "helmet", "gloves", "boots", "ring", "amulet"][i]),
@@ -75,11 +88,16 @@ export function useGameState() {
   const [enhanceLog, setEnhanceLog] = useState<string[]>([]);
   const [enhanceAnim, setEnhanceAnim] = useState<string | null>(null);
   const [arenaOpponents, setArenaOpponents] = useState<GameArenaOpponent[]>([]);
+  const [dungeonInjuredUntil, setDungeonInjuredUntil] = useState(0);
   const [arenaInjuredUntil, setArenaInjuredUntil] = useState(0);
   const [arenaRefreshes, setArenaRefreshes] = useState(5);
   const [arenaLastDate, setArenaLastDate] = useState("");
   const [questState, setQuestState] = useState<GameQuestState>(() => initQuestState());
   const [questNotify, setQuestNotify] = useState<string | null>(null);
+  const [tavernQuestState, setTavernQuestState] = useState(() => ({
+    ...createInitialTavernQuestState((initialSave.player as GamePlayer).level || 1),
+    progress: { ...(((initialSave.player as GamePlayer).monsterKills as Record<string, number>) || {}) },
+  }));
 
   const save = useCallback(() => {
     saveGameState({ player, inventory });
@@ -92,6 +110,9 @@ export function useGameState() {
     clearGameState();
     setPlayer({ ...INITIAL_PLAYER, equipment: { ...INITIAL_EQUIPMENT } });
     setInventory([]);
+    setDungeonInjuredUntil(0);
+    setArenaInjuredUntil(0);
+    setTavernQuestState(createInitialTavernQuestState(1));
     setReplay(null);
     setSelectedScrolls([]);
   };
@@ -137,6 +158,7 @@ export function useGameState() {
   const navTabs = [
     { id: "dungeon", label: "地下城", badgeCount: 0 },
     { id: "arena", label: "🏟 競技場", badgeCount: 0 },
+    { id: "tavern", label: "🍺 酒館", badgeCount: 0 },
     { id: "quest", label: "📋 任務", badgeCount: questBadgeCount },
     { id: "shop", label: "商店", badgeCount: 0 },
     { id: "inventory", label: "背包", badgeCount: 0 },
@@ -196,6 +218,14 @@ export function useGameState() {
     return next;
   }
 
+  function mergeMonsterKills(current: Record<string, number>, kills: Array<{ enemyId: string; count: number }>) {
+    const merged = { ...current };
+    for (const kill of kills) {
+      merged[kill.enemyId] = (merged[kill.enemyId] || 0) + kill.count;
+    }
+    return merged;
+  }
+
   const updateQuestProgress = (updatedPlayer: any, updatedInventory: any) => {
     const statsWithInv = { ...updatedPlayer, _inv: updatedInventory || inventory };
     const newQs = checkQuestReset(questState, updatedPlayer);
@@ -210,8 +240,17 @@ export function useGameState() {
   };
 
   const startBattle = (dungeon: any, tier: any) => {
+    const now = Date.now();
+    if (now < dungeonInjuredUntil) {
+      const mins = Math.ceil((dungeonInjuredUntil - now) / 60_000);
+      alert(`你仍在養傷中，還需 ${mins} 分鐘才能出戰！`);
+      setTab("tavern");
+      return;
+    }
+
     const result = simulateRun(dungeon, tier, { ...player }, { lvUp, genLoot, genMercScroll });
     const fp = result.finalPlayer;
+    const mergedKills = mergeMonsterKills((fp.monsterKills as Record<string, number>) || {}, result.kills || []);
     const killCount = dungeon.waves.flatMap((w: any) => w.monsters).length + (dungeon.boss ? 1 : 0);
     const bossKill = result.won ? 1 : 0;
     fp.totalKills = (fp.totalKills || 0) + (result.won ? killCount : Math.floor(killCount * 0.5));
@@ -219,7 +258,12 @@ export function useGameState() {
     fp.totalDungeons = (fp.totalDungeons || 0) + (result.won ? 1 : 0);
     fp.totalGoldEarned = (fp.totalGoldEarned || 0) + Math.max(0, fp.gold - player.gold);
     fp.highestLevel = Math.max(fp.highestLevel || 1, fp.level);
+    fp.monsterKills = mergedKills;
+    if (!result.won) {
+      setDungeonInjuredUntil(now + 30 * 60 * 1000);
+    }
     setPlayer(fp);
+    setTavernQuestState((state) => ({ ...state, progress: mergedKills }));
     setReplay({
       lines: result.log,
       cursor: 0,
@@ -235,13 +279,27 @@ export function useGameState() {
   };
 
   const startExpedition = (expedition: any) => {
+    const now = Date.now();
+    if (now < dungeonInjuredUntil) {
+      const mins = Math.ceil((dungeonInjuredUntil - now) / 60_000);
+      alert(`你仍在養傷中，還需 ${mins} 分鐘才能出戰！`);
+      setTab("tavern");
+      return;
+    }
+
     const result = simulateExpedition(expedition, { ...player }, { lvUp, genLoot, genMercScroll });
     const fp = result.finalPlayer;
+    const mergedKills = mergeMonsterKills((fp.monsterKills as Record<string, number>) || {}, result.kills || []);
     fp.totalKills = (fp.totalKills || 0) + (result.won ? 1 : 0);
     fp.totalExpeditions = (fp.totalExpeditions || 0) + (result.won ? 1 : 0);
     fp.totalGoldEarned = (fp.totalGoldEarned || 0) + Math.max(0, fp.gold - player.gold);
     fp.highestLevel = Math.max(fp.highestLevel || 1, fp.level);
+    fp.monsterKills = mergedKills;
+    if (!result.won) {
+      setDungeonInjuredUntil(now + 30 * 60 * 1000);
+    }
     setPlayer(fp);
+    setTavernQuestState((state) => ({ ...state, progress: mergedKills }));
     setReplay({
       lines: result.log,
       cursor: 0,
@@ -257,7 +315,16 @@ export function useGameState() {
   function handleTabSelect(nextTab: string) {
     setTab(nextTab);
     if (nextTab === "arena" && arenaOpponents.length === 0) initArena();
+    if (nextTab === "tavern" && tavernQuestState.board.length === 0) {
+      setTavernQuestState((state) => refreshTavernBoard(state, player.level));
+    }
   }
+
+  useEffect(() => {
+    if (dungeonInjuredUntil > 0 && player.hp >= cMhp(player)) {
+      setDungeonInjuredUntil(0);
+    }
+  }, [dungeonInjuredUntil, player]);
 
   useEffect(() => {
     if (!replay || replay.cursor >= replay.lines.length) return;
@@ -350,6 +417,14 @@ export function useGameState() {
   });
 
   const startMercBattle = (dungeonId: any) => {
+    const now = Date.now();
+    if (now < dungeonInjuredUntil) {
+      const mins = Math.ceil((dungeonInjuredUntil - now) / 60_000);
+      alert(`你仍在養傷中，還需 ${mins} 分鐘才能出戰！`);
+      setTab("tavern");
+      return;
+    }
+
     const dungeon = MERC_DUNGEONS.find((d) => d.id === dungeonId) || MERC_DUNGEONS[0];
     if (player.level < dungeon.minLv) {
       alert(`需要 Lv.${dungeon.minLv}！`);
@@ -365,9 +440,15 @@ export function useGameState() {
     const np = { ...player };
     const result = simulateMercRun(dungeonId, np, mercs, { lvUp, genLoot, genMercScroll, mercDungeons: MERC_DUNGEONS });
     const fp = result.finalPlayer;
+    const mergedKills = mergeMonsterKills((fp.monsterKills as Record<string, number>) || {}, result.kills || []);
     fp.totalMercRuns = (fp.totalMercRuns || 0) + (result.won ? 1 : 0);
     fp.highestLevel = Math.max(fp.highestLevel || 1, fp.level);
+    fp.monsterKills = mergedKills;
+    if (!result.won) {
+      setDungeonInjuredUntil(now + 30 * 60 * 1000);
+    }
     setPlayer(fp);
+    setTavernQuestState((state) => ({ ...state, progress: mergedKills }));
     setSelectedScrolls([]);
     setReplay({
       lines: result.log,
@@ -443,17 +524,17 @@ export function useGameState() {
     );
   };
 
-  const sellJunk = () => {
-    const equippedUids = new Set(Object.values(player.equipment).filter(Boolean).map((e) => e.uid));
-    const junk = inventory.filter((i) => i.rarity === "normal" && !equippedUids.has(i.uid) && i.type !== "potion");
-    const total = junk.reduce((s, i) => s + calcSellPrice(i), 0);
-    if (!junk.length) {
-      alert("沒有普通品質裝備可賣");
+  const sellJunk = (threshold: SellThreshold = sellThreshold) => {
+    const result = getBulkSellResult(inventory, player.equipment as Record<string, any>, threshold);
+    if (!result.items.length) {
+      alert(`沒有${getRarity(threshold).label}以下的裝備可賣`);
       return;
     }
-    setPlayer((p) => ({ ...p, gold: p.gold + total }));
-    setInventory((inv) => inv.filter((i) => !junk.find((j) => j.uid === i.uid)));
-    alert(`賣出 ${junk.length} 件普通裝備，獲得 ${total} 金幣`);
+
+    const soldUids = new Set(result.items.map((item) => item.uid));
+    setPlayer((p) => ({ ...p, gold: p.gold + result.gold }));
+    setInventory((inv) => inv.filter((item) => !soldUids.has(item.uid)));
+    alert(`賣出 ${result.items.length} 件裝備，獲得 ${result.gold} 金幣`);
   };
 
   const refreshShop = () => {
@@ -466,6 +547,66 @@ export function useGameState() {
     setShopItems(Array.from({ length: 8 }, () => genShopItem(player.level)));
   };
   const refreshShopCost = Math.floor(player.level * 5 + 20);
+  const tavernRestCost = Math.max(50, Math.floor(player.level * 15));
+
+  const restAtInn = () => {
+    const now = Date.now();
+    const atFullHp = player.hp >= cMhp(player);
+    const needsRest = now < dungeonInjuredUntil || now < arenaInjuredUntil || !atFullHp;
+
+    if (!needsRest) {
+      alert("你目前狀態良好，暫時不需要住宿。");
+      return;
+    }
+    if (player.gold < tavernRestCost) {
+      alert(`住宿需要 ${tavernRestCost} 金幣。`);
+      return;
+    }
+
+    setPlayer((p) => ({ ...p, gold: p.gold - tavernRestCost, hp: cMhp(p) }));
+    setDungeonInjuredUntil(0);
+    setArenaInjuredUntil(0);
+  };
+
+  const refreshTavern = () => {
+    const cost = Math.max(20, Math.floor(player.level * 8));
+    if (player.gold < cost) {
+      alert(`刷新酒館告示板需要 ${cost} 金幣`);
+      return;
+    }
+
+    setPlayer((p) => ({ ...p, gold: p.gold - cost }));
+    setTavernQuestState((state) => refreshTavernBoard(state, player.level));
+  };
+
+  const acceptTavernQuestAction = (questId: string) => {
+    setTavernQuestState((state) => acceptTavernQuest(state, questId));
+  };
+
+  const abandonTavernQuestAction = (questId: string) => {
+    setTavernQuestState((state) => abandonTavernQuest(state, questId));
+  };
+
+  const claimTavernQuestAction = (questId: string) => {
+    const quest = tavernQuestState.board.find((entry) => entry.id === questId);
+    const acceptedState = tavernQuestState.accepted[questId];
+    if (!quest || !acceptedState?.accepted) return;
+
+    const currentKills = tavernQuestState.progress[quest.targetMonster] ?? 0;
+    if (currentKills - acceptedState.baseKills < quest.reqCount) return;
+
+    setPlayer((p) => {
+      const log: any[] = [];
+      return lvUp({ ...p }, quest.reward.exp, quest.reward.gold, log);
+    });
+    setTavernQuestState((state) => claimTavernQuestReward({ ...state, activeQuestId: questId }));
+    setQuestNotify(`✅ 酒館委託完成：${quest.title}`);
+    setTimeout(() => setQuestNotify(null), 3000);
+  };
+
+  const dismissTavernStory = () => {
+    setTavernQuestState((state) => dismissStoryReward(state));
+  };
 
   const doEnhance = (uid: any) => {
     const fromInv = inventory.find((i) => i.uid === uid);
@@ -923,8 +1064,11 @@ export function useGameState() {
     isActive: invFilter === filter.id,
     onSelect: () => setInvFilter(filter.id),
   }));
+  const recovery = { dungeonInjuredUntil, arenaInjuredUntil };
 
   return {
+    acceptTavernQuestAction,
+    abandonTavernQuestAction,
     arenaInjuredUntil,
     arenaOpponents,
     arenaRefresh,
@@ -939,7 +1083,10 @@ export function useGameState() {
     doEnhance,
     doTrain,
     addFreeMercScroll,
+    claimTavernQuestAction,
     dungeonSections,
+    dungeonInjuredUntil,
+    dismissTavernStory,
     equipmentSidebarItems,
     enhanceAnim,
     enhanceLog,
@@ -979,6 +1126,11 @@ export function useGameState() {
     refreshShop,
     replay,
     replaySummary,
+    recovery,
+    refreshTavern,
+    restAtInn,
+    tavernQuestState,
+    tavernRestCost,
     reset,
     restartReplayBattle,
     save,
@@ -986,6 +1138,7 @@ export function useGameState() {
     selectedScrollObjs,
     selectedScrolls,
     sellListItems,
+    sellThreshold,
     selectMercScrollFromInventory,
     sellItem,
     sellJunk,
@@ -997,6 +1150,7 @@ export function useGameState() {
     setPlayer,
     setReplay,
     setSelectedScrolls,
+    setSellThreshold,
     setShopFilter,
     setShopTab,
     setTab,

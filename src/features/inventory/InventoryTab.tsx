@@ -11,7 +11,7 @@ type InventoryTabProps = {
   isEmpty: boolean;
   inventoryItems: GameState["inventoryItems"];
   onSortInventory: GameState["sortInventory"];
-  onSellJunk: GameState["sellJunk"];
+  onSellJunk: () => void;
 };
 
 export function InventoryTab({

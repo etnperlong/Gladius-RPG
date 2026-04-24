@@ -28,6 +28,7 @@ export type RuntimePlayer = {
   totalEnhances: number;
   totalTrains: number;
   totalMercRuns: number;
+  monsterKills: Record<string, number>;
   highestLevel: number;
   [key: string]: unknown;
 };

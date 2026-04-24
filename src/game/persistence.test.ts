@@ -133,6 +133,32 @@ describe("migrateGameState", () => {
       { uid: "loot-2", name: "皮甲" },
     ]);
   });
+
+  it("preserves player monster kill counters when provided as numeric map", () => {
+    const save = migrateGameState({
+      player: {
+        monsterKills: {
+          wolf: 7,
+          goblin: 3,
+        },
+      },
+    });
+
+    expect(save.player.monsterKills).toEqual({ wolf: 7, goblin: 3 });
+  });
+
+  it("falls back monster kill counters when payload has invalid values", () => {
+    const save = migrateGameState({
+      player: {
+        monsterKills: {
+          wolf: "7",
+          goblin: Number.NaN,
+        },
+      },
+    });
+
+    expect(save.player.monsterKills).toEqual({});
+  });
 });
 
 describe("loadGameState", () => {

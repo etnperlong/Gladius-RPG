@@ -3,18 +3,22 @@ import "./game.css";
 import { HpBar } from "../components/HpBar";
 import { ItemCard } from "../components/ItemCard";
 import { LootPopup } from "../components/LootPopup";
+import { StoryModal } from "../components/StoryModal/StoryModal";
 import { ArenaTab } from "../features/arena/ArenaTab";
 import { BattleReport } from "../features/battle/BattleReport";
 import { DungeonTab } from "../features/dungeon/DungeonTab";
 import { InventoryTab } from "../features/inventory/InventoryTab";
 import { QuestTab } from "../features/quests/QuestTab";
 import { ShopTab } from "../features/shop/ShopTab";
+import { TavernPage } from "../features/tavern/TavernPage";
 import { TrainTab } from "../features/train/TrainTab";
 import { useGameState } from "./useGameState";
 
 export default function GameApp() {
   const state = useGameState();
   const {
+    acceptTavernQuestAction,
+    abandonTavernQuestAction,
     arenaInjuredUntil,
     arenaOpponents,
     arenaRefresh,
@@ -23,7 +27,9 @@ export default function GameApp() {
     collectQuest,
     discardLoot,
     addFreeMercScroll,
+    claimTavernQuestAction,
     dungeonSections,
+    dismissTavernStory,
     equipmentSidebarItems,
     enhanceAnim,
     enhanceLog,
@@ -51,12 +57,17 @@ export default function GameApp() {
     refreshShop,
     replay,
     replaySummary,
+    recovery,
+    refreshTavern,
+    restAtInn,
     reset,
     restartReplayBattle,
     save,
     saveMsg,
     selectedScrolls,
     sellListItems,
+    sellThreshold,
+    setSellThreshold,
     sellJunk,
     shopDisplayItems,
     shopTab,
@@ -70,6 +81,8 @@ export default function GameApp() {
     trainingCards,
     tMhp,
     tSpd,
+    tavernQuestState,
+    tavernRestCost,
     tab,
     takeLoot,
     wCat,
@@ -234,6 +247,23 @@ export default function GameApp() {
                 onCollect={collectQuest}
               />}
 
+              {tab === "tavern" && (
+                <TavernPage
+                  player={{ hp: player.hp, maxHp: tMhp }}
+                  recovery={recovery}
+                  restCost={tavernRestCost}
+                  board={tavernQuestState.board}
+                  activeQuestId={tavernQuestState.activeQuestId}
+                  accepted={tavernQuestState.accepted}
+                  progress={tavernQuestState.progress}
+                  onRest={restAtInn}
+                  onRefresh={refreshTavern}
+                  onAcceptQuest={acceptTavernQuestAction}
+                  onClaimQuest={claimTavernQuestAction}
+                  onAbandonQuest={abandonTavernQuestAction}
+                />
+              )}
+
               {tab === "battle" && (
                 <BattleReport
                   replay={replay}
@@ -259,6 +289,8 @@ export default function GameApp() {
                   auctionDisplayItems={auctionDisplayItems}
                   hasSellableInventory={hasSellableInventory}
                   sellListItems={sellListItems}
+                  sellThreshold={sellThreshold}
+                  onSellThresholdChange={setSellThreshold}
                   sortInventory={sortInventory}
                   sellJunk={sellJunk}
                 />
@@ -271,7 +303,7 @@ export default function GameApp() {
                   isEmpty={inventoryItems.length === 0}
                   inventoryItems={inventoryItems}
                   onSortInventory={sortInventory}
-                  onSellJunk={sellJunk}
+                  onSellJunk={() => sellJunk("normal")}
                 />
               )}
             </div>
@@ -284,6 +316,10 @@ export default function GameApp() {
               <div key={i} style={{ marginBottom: i === 0 ? 4 : 0 }}>{line}</div>
             ))}
           </div>
+        )}
+
+        {tavernQuestState.storyReward && (
+          <StoryModal story={tavernQuestState.storyReward} onDismiss={dismissTavernStory} />
         )}
 
         {lootDrop && <LootPopup

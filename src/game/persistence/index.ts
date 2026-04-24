@@ -52,6 +52,22 @@ function mergeEquipment(equipment: unknown): RuntimeEquipment {
   return mergedEquipment;
 }
 
+function mergeMonsterKills(monsterKills: unknown): Record<string, number> {
+  if (!isRecord(monsterKills)) {
+    return {};
+  }
+
+  const merged: Record<string, number> = {};
+
+  for (const [enemyId, count] of Object.entries(monsterKills)) {
+    if (isFiniteNumber(count)) {
+      merged[enemyId] = count;
+    }
+  }
+
+  return merged;
+}
+
 function mergePlayer(player: unknown): RuntimePlayer {
   const initialPlayer = createInitialPlayer();
 
@@ -62,10 +78,11 @@ function mergePlayer(player: unknown): RuntimePlayer {
   const mergedPlayer: RuntimePlayer = {
     ...initialPlayer,
     equipment: mergeEquipment(player.equipment),
+    monsterKills: mergeMonsterKills(player.monsterKills),
   };
 
   for (const [key, value] of Object.entries(player)) {
-    if (key === "equipment") {
+    if (key === "equipment" || key === "monsterKills") {
       continue;
     }
 

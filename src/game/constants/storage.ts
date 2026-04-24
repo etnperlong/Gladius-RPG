@@ -37,6 +37,7 @@ export function createInitialPlayer(): RuntimePlayer {
     totalEnhances: 0,
     totalTrains: 0,
     totalMercRuns: 0,
+    monsterKills: {},
     highestLevel: 1,
   };
 }

@@ -8,6 +8,7 @@ import { MERC_BASES, MERC_DUNGEONS, MERC_SCROLL_AFFIXES } from "./mercenaries";
 import { MONSTERS } from "./monsters";
 import { QUEST_DEFS } from "./quests";
 import { RARITIES } from "./rarities";
+import { TAVERN_QUEST_DEFS } from "./tavernQuests";
 
 describe("content data tables", () => {
   it("preserves representative content anchors", () => {
@@ -41,6 +42,12 @@ describe("content data tables", () => {
       boss: expect.objectContaining({ name: "盜賊首領" }),
     });
     expect(Object.keys(QUEST_DEFS)).toContain("d1");
+    expect(TAVERN_QUEST_DEFS.find((quest) => quest.id === "wolf_hunt")).toMatchObject({
+      reqLv: 1,
+      targetMonster: "wolf",
+      reqCount: 5,
+      hint: expect.stringContaining("地下城"),
+    });
     expect(ARENA_FIRST_NAMES).toContain("鐵拳");
     expect(ARENA_LAST_NAMES).toContain("戰士");
     expect(ARENA_TITLES).toContain("傳奇的");

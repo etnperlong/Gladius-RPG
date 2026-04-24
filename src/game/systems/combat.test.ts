@@ -208,6 +208,10 @@ describe("combat system", () => {
       { name: "寶箱", rarityLabel: "普通" },
       { name: "卷軸", rarityLabel: "稀有" },
     ]);
+    expect(result.kills).toEqual([
+      expect.objectContaining({ enemyId: "wolf", count: 1 }),
+      expect.objectContaining({ enemyId: "wolfKing", count: 1 }),
+    ]);
     expect(result.log.map((entry) => entry.txt)).toContain("👑 擊敗Boss 狼王！+435EXP +96金");
   });
 
@@ -254,6 +258,11 @@ describe("combat system", () => {
       { name: "契約", rarityLabel: "稀有" },
       { name: "素材", rarityLabel: "普通" },
     ]);
+    expect(result.kills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ enemyId: "wolf", count: 1 }),
+      ]),
+    );
     expect(result.log.map((entry) => entry.txt)).toContain("💚治癒師回復8HP");
   });
 
