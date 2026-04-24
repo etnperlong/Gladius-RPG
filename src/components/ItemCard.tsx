@@ -1,10 +1,12 @@
+import type { ReactNode } from "react";
+
 import { EQUIP_SLOTS } from "../game/data/equipmentSlots";
 import { WEAPON_CATEGORIES } from "../game/data/weaponCategories";
 import { getRarity } from "../game/systems";
 
 import { AffixLines } from "./AffixLines";
 
-export function ItemCard({ item, onEquip, onUse }: { item: any; onEquip?: any; onUse?: any }) {
+export function ItemCard({ item, onEquip, onUse, footer }: { item: any; onEquip?: any; onUse?: any; footer?: ReactNode }) {
   const rar = getRarity(item.rarity);
   const rc = rar.color;
   const glow = rar.glow;
@@ -49,6 +51,7 @@ export function ItemCard({ item, onEquip, onUse }: { item: any; onEquip?: any; o
       <div style={{ marginTop: 7, display: "flex", flexDirection: "column", gap: 4 }}>
         {onEquip && <button className="btn btp" style={{ width: "100%", fontSize: 10 }} onClick={onEquip}>裝備</button>}
         {onUse   && <button className="btn btm" style={{ width: "100%", fontSize: 10 }} onClick={onUse}>使用</button>}
+        {footer}
       </div>
     </div>
   );
