@@ -7,6 +7,7 @@ import {
   INITIAL_PLAYER,
 } from "../game/constants";
 import { AffixLines } from "../components/AffixLines";
+import { HpBar } from "../components/HpBar";
 import { DUNGEON_TIERS } from "../game/data/dungeonTiers";
 import { DUNGEONS } from "../game/data/dungeons";
 import { ENHANCE_LEVELS } from "../game/data/enhanceLevels";
@@ -119,15 +120,6 @@ function ItemCard({ item, onEquip, onUse }: { item: any; onEquip?: any; onUse?: 
         {onEquip&&<button className="btn btp" style={{width:"100%",fontSize:10}} onClick={onEquip}>裝備</button>}
         {onUse  &&<button className="btn btm" style={{width:"100%",fontSize:10}} onClick={onUse}>使用</button>}
       </div>
-    </div>
-  );
-}
-
-function HpBar({ cur, max, color="#c83030", thin }: { cur: any; max: any; color?: string; thin?: any }) {
-  return (
-    <div className="bw">
-      <div className="bl"><span>HP</span><span>{cur}/{max}</span></div>
-      <div className="bt" style={thin?{height:6}:{}}><div className="bf" style={{width:`${Math.round(Math.max(0,cur)/max*100)}%`,background:`linear-gradient(90deg,${color}99,${color})`}}/></div>
     </div>
   );
 }
