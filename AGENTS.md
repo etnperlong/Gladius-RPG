@@ -50,12 +50,12 @@ The active application is now a modular `src/`-based app.
 
 ## Legacy Surface Policy
 
-There are still historical non-runtime files in the repository, including older standalone snapshots and other leftover artifacts from earlier phases.
+Historical runtime snapshots and other non-runtime leftovers may still appear in documentation history or in future cleanup targets, but they are not part of the active app architecture.
 
 - They are not the active architecture.
-- They should be treated as pending cleanup input for a later dedicated plan.
+- Do not recreate them as parallel runtime paths.
 - Do not reintroduce them as the source of truth while working on the current app.
 
 ## Near-Term Cleanup Note
 
-The next cleanup phase may remove obsolete legacy files such as old standalone `html`, `jsx`, and other archival artifacts once their remaining value is reviewed.
+The next cleanup phase can focus on any remaining archival or documentation-adjacent leftovers that are outside the active `src/` runtime.
