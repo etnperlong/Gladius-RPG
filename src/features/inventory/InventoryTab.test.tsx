@@ -43,6 +43,34 @@ it("renders inventory controls, filters, and item actions", () => {
         },
         {
           item: {
+            uid: "weapon-1",
+            type: "weapon",
+            icon: "🗡",
+            name: "角鬥士長劍",
+            rarity: "epic",
+            cat: "sword",
+            attack: 60,
+            defense: 22,
+            hp: 90,
+            speed: 4,
+            heal: 0,
+            enhLv: 0,
+            itemLevel: 12,
+            slot: "weapon",
+            cost: 300,
+            affixes: [{ stat: "attack", rolledVal: 7, tag: "鋒芒" }],
+            specials: [],
+          },
+          onUse: undefined,
+          onSell: vi.fn(),
+          price: 120,
+          rarity: { color: "#9c50d4", glow: "0 0 8px #9c50d4", label: "史詩" },
+          onEquip: vi.fn(),
+          onSelectMerc: undefined,
+          selectLabel: "",
+        },
+        {
+          item: {
             uid: "scroll-1",
             type: "merc_scroll",
             icon: "🛡",
@@ -81,7 +109,16 @@ it("renders inventory controls, filters, and item actions", () => {
   expect(screen.getByText("全部")).toBeInTheDocument();
   expect(screen.getByText("武器")).toBeInTheDocument();
   expect(screen.getByText("回復 25HP")).toBeInTheDocument();
+  expect(screen.getByText("角鬥士長劍")).toBeInTheDocument();
+  expect(screen.getByText((_, element) => element?.textContent === "Lv.12")).toBeInTheDocument();
+  expect(screen.getByText("攻+60")).toBeInTheDocument();
+  expect(screen.getByText("防+22")).toBeInTheDocument();
+  expect(screen.getByText("HP+90")).toBeInTheDocument();
+  expect(screen.getByText("速+4")).toBeInTheDocument();
+  expect(screen.getByText((_, element) => element?.textContent === "⚔️劍 · 平衡型，無特殊效果")).toBeInTheDocument();
+  expect(screen.getByText("鋒芒: +7 攻擊")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "使用" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "裝備" })).toHaveLength(1);
   expect(screen.getByRole("button", { name: "選入傭兵隊" })).toBeInTheDocument();
   expect(screen.getByText("軍紀:全屬+10%")).toBeInTheDocument();
 });
